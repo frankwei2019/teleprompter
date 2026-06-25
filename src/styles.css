@@ -279,9 +279,14 @@ html, body {
   margin: 0 0 4px 0;
 }
 .help-content .date {
-  color: #888;
-  font-size: 11px;
+  color: #aaa;
+  font-size: 12px;
   margin: 0 0 16px 0;
+}
+.help-content .credit-line {
+  color: #aaa;
+  font-size: 12px;
+  margin: 0 0 4px 0;
 }
 .help-content h3 {
   font-size: 13px;
