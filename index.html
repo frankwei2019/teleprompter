@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>词悬浮</title>
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <div class="drag-handle" data-tauri-drag-region>
+    <button class="icon-btn drag-exempt" id="settingsToggle" title="打开设置">⚙</button>
+    <button class="icon-btn drag-exempt" id="helpBtn" title="关于">?</button>
+    <span class="drag-spacer"></span>
+    <button class="icon-btn drag-exempt" id="closeBtn" title="关闭" aria-label="关闭">×</button>
+  </div>
+  <div class="help-modal" id="helpModal" hidden>
+    <div class="help-content">
+      <h2>词悬浮</h2>
+      <p class="version">版本 V1.0</p>
+      <p class="date">构建日期：<span id="buildDate"></span></p>
+      <h3>基本功能</h3>
+      <ul>
+        <li>多预设脚本管理与切换</li>
+        <li>滚动速度、字体大小可调</li>
+        <li>背景透明度、字体颜色自定义</li>
+        <li>镜像模式（适配提词器玻璃）</li>
+        <li>循环播放</li>
+        <li>导入 .txt / .md 文件</li>
+        <li>状态自动保存</li>
+      </ul>
+      <button id="helpClose">关闭</button>
+    </div>
+  </div>
+  <div class="scroll-area" id="scrollArea">
+    <div class="scroll-content" id="scrollContent"></div>
+    <div class="countdown-overlay" id="countdownOverlay" hidden></div>
+  </div>
+  <div class="control-bar">
+    <button class="ctrl-btn" id="resetBtn" title="重置滚动到顶部">↺ 重置</button>
+    <button class="ctrl-btn" id="prevBtn" title="上一个提示词">⏮</button>
+    <button class="ctrl-btn play-pause" id="playPauseBtn" title="播放">▶</button>
+    <button class="ctrl-btn" id="nextBtn" title="下一个提示词">⏭</button>
+  </div>
+  <div class="settings-panel collapsed" id="settingsPanel">
+    <div class="section">
+      <div class="section-title">预设</div>
+      <div class="prompts-list" id="promptsList"></div>
+      <button class="add-prompt-btn" id="addPromptBtn">+ 新建预设</button>
+    </div>
+    <div class="section">
+      <div class="section-title">外观</div>
+      <div class="control-row">
+        <label>滚动速度 <span id="speedValue">30</span></label>
+        <input type="range" id="speedSlider" min="5" max="200" value="30">
+      </div>
+      <div class="control-row">
+        <label>字体大小 <span id="fontSizeValue">48</span></label>
+        <input type="range" id="fontSizeSlider" min="16" max="120" value="48">
+      </div>
+      <div class="control-row">
+        <label>背景透明 <span id="bgValue">30</span>%</label>
+        <input type="range" id="bgSlider" min="0" max="100" value="30">
+      </div>
+      <div class="control-row">
+        <label>字体颜色</label>
+        <div class="color-swatches" id="colorSwatches">
+          <button class="swatch" data-color="#ffffff" style="background:#ffffff"></button>
+          <button class="swatch" data-color="#000000" style="background:#000000"></button>
+          <button class="swatch" data-color="#4a9eff" style="background:#4a9eff"></button>
+          <button class="swatch" data-color="#4ade80" style="background:#4ade80"></button>
+          <button class="swatch" data-color="#fbbf24" style="background:#fbbf24"></button>
+          <button class="swatch" data-color="#f87171" style="background:#f87171"></button>
+          <button class="swatch" data-color="#a78bfa" style="background:#a78bfa"></button>
+        </div>
+      </div>
+      <div class="control-row">
+        <label class="toggle-label">
+          <span>镜像模式</span>
+          <input type="checkbox" id="mirrorToggle">
+        </label>
+      </div>
+      <div class="control-row">
+        <label class="toggle-label">
+          <span>循环播放</span>
+          <input type="checkbox" id="loopToggle" checked>
+        </label>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">文本</div>
+      <textarea id="textInput" placeholder="在此输入或粘贴提示词文本..." rows="3"></textarea>
+      <div class="action-buttons">
+        <button id="importBtn">导入文件</button>
+      </div>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
