@@ -42,9 +42,9 @@ input, textarea, button, select { user-select: auto; -webkit-user-select: auto; 
 .icon-btn:hover, .icon-btn:active { background: rgba(255, 255, 255, 0.18); }
 .icon-btn.active { background: rgba(74, 158, 255, 0.4); }
 
-/* === 滚动区（手机版固定上半屏） === */
+/* === 滚动区（吃掉剩余空间，避免底部露出黑色背景条） === */
 .scroll-area {
-  flex: 0 0 50%;
+  flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
   position: relative;

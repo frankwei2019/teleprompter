@@ -77,6 +77,7 @@ class FloatingWindowService : Service() {
 
   private var tv: TextView? = null
   private var btnToggle: Button? = null
+  private var countdownView: TextView? = null
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -174,16 +175,20 @@ class FloatingWindowService : Service() {
 
   private fun createFloatingView() {
     val wm = windowManager ?: return
-    val container = LinearLayout(this).apply {
-      orientation = LinearLayout.VERTICAL
+    // FrameLayout so a countdown number can be layered on top of the content.
+    val container = android.widget.FrameLayout(this).apply {
       // 关键：setBackground(null) 让 view 真没背景
       // （setBackgroundColor(TRANSPARENT) 会画一个透明 drawable，某些 Android 版本会被合成成黑）
       setBackground(null)
-      setPadding(dp(8), dp(4), dp(8), dp(8))
       // Let the text scroll past the container bounds; the window itself clips.
       clipChildren = false
     }
     containerView = container
+
+    val content = LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL
+      setBackground(null)
+    }
 
     val topBar = LinearLayout(this).apply {
       orientation = LinearLayout.HORIZONTAL
@@ -213,11 +218,7 @@ class FloatingWindowService : Service() {
       setBackground(null)
       setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
       setPadding(dp(4), 0, dp(4), 0)
-      setOnClickListener {
-        scrollOffset = 0f
-        val viewport = params?.height ?: 0
-        tv?.translationY = viewport.toFloat()
-      }
+      setOnClickListener { startResetCountdown() }
     }
     val btnClose = Button(this).apply {
       text = "×"
@@ -246,13 +247,40 @@ class FloatingWindowService : Service() {
     }
     textView = tv
 
-    container.addView(topBar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(36)))
+    content.addView(topBar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(36)))
     // Wrap content height so long scripts scroll fully instead of being clipped
     // to a fixed region; position it below the viewport to start from the bottom.
-    container.addView(
+    content.addView(
       tv,
       LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         .apply { topMargin = dp(4) }
+    )
+    container.addView(
+      content,
+      android.widget.FrameLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.MATCH_PARENT
+      )
+    )
+
+    // Countdown overlay (3/2/1) shown when reset is pressed, like the main UI.
+    val countdown = TextView(this).apply {
+      text = "3"
+      setTextColor(Color.WHITE)
+      setTextSize(TypedValue.COMPLEX_UNIT_SP, 96f)
+      typeface = Typeface.DEFAULT_BOLD
+      gravity = Gravity.CENTER
+      visibility = android.view.View.GONE
+      setShadowLayer(8f, 0f, 0f, Color.BLACK)
+      setBackgroundColor(0x00000000)
+    }
+    countdownView = countdown
+    container.addView(
+      countdown,
+      android.widget.FrameLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.MATCH_PARENT
+      )
     )
 
     val displayMetrics = resources.displayMetrics
@@ -325,20 +353,15 @@ class FloatingWindowService : Service() {
     iconParams = lp
     iconView = icon
 
-    icon.setOnClickListener {
-      // Restore the main window (singleTask, so it reuses the existing task)
-      // and exit floating mode so the two windows never stack.
-      val i = Intent(this, MainActivity::class.java).apply {
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-      }
-      startActivity(i)
-      stopSelf()
-    }
-    // Draggable, same gesture logic as the overlay's drag handle.
+    // Tap = restore main window; drag = move the ball. Handle both in one
+    // touch listener (a separate OnClickListener never fires because the
+    // OnTouchListener consumes ACTION_DOWN).
     var initX = 0
     var initY = 0
     var touchX = 0f
     var touchY = 0f
+    var dragging = false
+    val touchSlop = android.view.ViewConfiguration.get(this).scaledTouchSlop
     icon.setOnTouchListener { _, event ->
       when (event.action) {
         MotionEvent.ACTION_DOWN -> {
@@ -346,13 +369,33 @@ class FloatingWindowService : Service() {
           initY = iconParams?.y ?: 0
           touchX = event.rawX
           touchY = event.rawY
+          dragging = false
           true
         }
         MotionEvent.ACTION_MOVE -> {
-          iconParams?.let { p ->
-            p.x = initX + (event.rawX - touchX).toInt()
-            p.y = initY + (event.rawY - touchY).toInt()
-            windowManager?.updateViewLayout(icon, p)
+          if (!dragging &&
+            (Math.abs(event.rawX - touchX) > touchSlop || Math.abs(event.rawY - touchY) > touchSlop)
+          ) {
+            dragging = true
+          }
+          if (dragging) {
+            iconParams?.let { p ->
+              p.x = initX + (event.rawX - touchX).toInt()
+              p.y = initY + (event.rawY - touchY).toInt()
+              windowManager?.updateViewLayout(icon, p)
+            }
+          }
+          true
+        }
+        MotionEvent.ACTION_UP -> {
+          if (!dragging) {
+            // Restore the main window (singleTask, so it reuses the existing task)
+            // and exit floating mode so the two windows never stack.
+            val i = Intent(this, MainActivity::class.java).apply {
+              addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            }
+            startActivity(i)
+            stopSelf()
           }
           true
         }
@@ -404,6 +447,38 @@ class FloatingWindowService : Service() {
     if (scrolling) lastFrameTime = 0
     btnToggle?.text = if (scrolling) "⏸" else "▶"
     statusView?.text = if (scrolling) "播放中" else "已暂停"
+  }
+
+  // 3-second countdown then reset to top and keep scrolling, like the main UI.
+  private fun startResetCountdown() {
+    scrolling = false
+    btnToggle?.text = "▶"
+    val countdown = countdownView ?: return
+    countdown.visibility = android.view.View.VISIBLE
+    val totalTicks = 3
+    var tick = 0
+    val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    val runnable = object : Runnable {
+      override fun run() {
+        tick++
+        if (tick < totalTicks) {
+          countdown.text = (totalTicks - tick).toString()
+          handler.postDelayed(this, 1000)
+        } else {
+          countdown.visibility = android.view.View.GONE
+          // Reset to top.
+          scrollOffset = 0f
+          lastFrameTime = 0
+          val viewport = params?.height ?: 0
+          tv?.translationY = viewport.toFloat()
+          // Keep scrolling after the countdown (was already running before reset).
+          scrolling = true
+          btnToggle?.text = "⏸"
+        }
+      }
+    }
+    countdown.text = totalTicks.toString()
+    handler.postDelayed(runnable, 1000)
   }
 
   private fun updateContent() {
