@@ -4,7 +4,26 @@ node_modules/
 # Build outputs
 dist/
 src-tauri/target/
-src-tauri/gen/
+src-tauri/gen/*
+!src-tauri/gen/android/
+src-tauri/gen/android/*
+!src-tauri/gen/android/app/
+src-tauri/gen/android/app/*
+!src-tauri/gen/android/app/src/
+src-tauri/gen/android/app/src/*
+!src-tauri/gen/android/app/src/main/
+src-tauri/gen/android/app/src/main/*
+!src-tauri/gen/android/app/src/main/java/
+src-tauri/gen/android/app/src/main/java/*
+!src-tauri/gen/android/app/src/main/java/com/
+src-tauri/gen/android/app/src/main/java/com/*
+!src-tauri/gen/android/app/src/main/java/com/teleprompter/
+src-tauri/gen/android/app/src/main/java/com/teleprompter/*
+!src-tauri/gen/android/app/src/main/java/com/teleprompter/app/
+src-tauri/gen/android/app/src/main/java/com/teleprompter/app/*
+!src-tauri/gen/android/app/src/main/java/com/teleprompter/app/MainActivity.kt
+!src-tauri/gen/android/app/src/main/java/com/teleprompter/app/FloatingWindowService.kt
+!src-tauri/gen/android/app/src/main/AndroidManifest.xml
 
 # Tauri
 src-tauri/WixTools/

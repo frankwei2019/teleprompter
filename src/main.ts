@@ -38,7 +38,7 @@ const DEFAULT_STATE: PrompterState = {
   settings: {
     scrollSpeed: 30,
     fontSize: 48,
-    bgTransparency: 30,
+    bgTransparency: 70,
     fontColor: '#ffffff',
     mirrorMode: false,
     loopPlayback: true,
@@ -266,6 +266,7 @@ function toggleSettings() {
   const willHide = !panel.classList.contains('collapsed');
   panel.classList.toggle('collapsed', willHide);
   btn.classList.toggle('active', !willHide);
+  document.body.classList.toggle('settings-open', !willHide);
 }
 
 let scrolling = false;
@@ -485,3 +486,29 @@ async function importFile() {
 }
 
 $('importBtn').addEventListener('click', importFile);
+
+async function startFloating() {
+  const p = currentPrompt();
+  if (!p.text.trim()) {
+    showStatus('请先输入文本');
+    return;
+  }
+  const s = state.settings;
+  // bgTransparency: 0=完全不透明黑底, 100=完全透明（只剩文字浮在所有 App 上）
+  const payload = [
+    p.text.replace(/\x1F/g, ' '),
+    String(s.fontSize),
+    s.fontColor,
+    String(s.scrollSpeed),
+    String(s.bgTransparency)  // 直接传 0-100，不再 100- 翻转
+  ].join('\x1F');
+  try {
+    // Permission state is checked inside Kotlin (MainActivity.onFloatingBridgeCall):
+    // if overlay permission is missing it opens the system settings and shows a toast.
+    await invoke('floating_bridge', { action: 'start', payload });
+    showStatus('✓ 已请求启动悬浮窗（若无权限会跳转设置，开启后再次点击）');
+  } catch (e) {
+    showStatus('启动失败: ' + (e instanceof Error ? e.message : String(e)));
+  }
+}
+$('startFloatingBtn')?.addEventListener('click', startFloating);
