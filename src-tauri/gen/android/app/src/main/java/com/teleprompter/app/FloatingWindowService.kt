@@ -52,11 +52,18 @@ class FloatingWindowService : Service() {
         val dt = if (lastFrameTime == 0L) 0f else (now - lastFrameTime) / 1_000_000_000f
         lastFrameTime = now
         scrollOffset += scrollSpeed * dt
-        tv?.translationY = -scrollOffset
+        // Viewport height: the overlay window height. Text starts below the
+        // viewport (bottom entry) and scrolls up out of the top, like the main UI.
+        val viewport = params?.height ?: 0
+        tv?.translationY = viewport - scrollOffset
         tv?.let {
-          val maxOffset = it.height.toFloat() + (containerView?.height ?: 0)
-          if (scrollOffset >= maxOffset) {
-            scrollOffset = 0f
+          // Only loop once the text height is known (post-layout); otherwise the
+          // first frames would wrongly reset to the top.
+          if (it.height > 0) {
+            val maxOffset = it.height.toFloat() + viewport
+            if (scrollOffset >= maxOffset) {
+              scrollOffset = 0f
+            }
           }
         }
       }
@@ -65,6 +72,7 @@ class FloatingWindowService : Service() {
   }
 
   private var tv: TextView? = null
+  private var btnToggle: Button? = null
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -144,6 +152,15 @@ class FloatingWindowService : Service() {
     } else {
       updateContent()
     }
+    // Auto-start scrolling so the overlay immediately behaves like the main UI.
+    scrolling = true
+    lastFrameTime = 0
+    if (floatingView != null) {
+      // Reset to the top of the script on every start tap.
+      scrollOffset = 0f
+      val viewport = params?.height ?: 0
+      tv?.translationY = viewport.toFloat()
+    }
     return START_NOT_STICKY
   }
 
@@ -155,6 +172,8 @@ class FloatingWindowService : Service() {
       // （setBackgroundColor(TRANSPARENT) 会画一个透明 drawable，某些 Android 版本会被合成成黑）
       setBackground(null)
       setPadding(dp(8), dp(4), dp(8), dp(8))
+      // Let the text scroll past the container bounds; the window itself clips.
+      clipChildren = false
     }
     containerView = container
 
@@ -172,13 +191,14 @@ class FloatingWindowService : Service() {
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
     val btnToggle = Button(this).apply {
-      text = "▶"
+      text = "⏸"
       setTextColor(Color.WHITE)
       setBackground(null)
       setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
       setPadding(dp(4), 0, dp(4), 0)
       setOnClickListener { toggleScroll() }
     }
+    this@FloatingWindowService.btnToggle = btnToggle
     val btnReset = Button(this).apply {
       text = "↻"
       setTextColor(Color.WHITE)
@@ -187,7 +207,8 @@ class FloatingWindowService : Service() {
       setPadding(dp(4), 0, dp(4), 0)
       setOnClickListener {
         scrollOffset = 0f
-        tv?.translationY = 0f
+        val viewport = params?.height ?: 0
+        tv?.translationY = viewport.toFloat()
       }
     }
     val btnClose = Button(this).apply {
@@ -218,7 +239,13 @@ class FloatingWindowService : Service() {
     textView = tv
 
     container.addView(topBar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(36)))
-    container.addView(tv, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(4) })
+    // Wrap content height so long scripts scroll fully instead of being clipped
+    // to a fixed region; position it below the viewport to start from the bottom.
+    container.addView(
+      tv,
+      LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        .apply { topMargin = dp(4) }
+    )
 
     val displayMetrics = resources.displayMetrics
     val width = (displayMetrics.widthPixels * 0.95f).toInt()
@@ -288,7 +315,8 @@ class FloatingWindowService : Service() {
     }
     scrolling = !scrolling
     if (scrolling) lastFrameTime = 0
-    statusView?.text = if (scrolling) "▶ 播放中" else "⏸ 暂停"
+    btnToggle?.text = if (scrolling) "⏸" else "▶"
+    statusView?.text = if (scrolling) "播放中" else "已暂停"
   }
 
   private fun updateContent() {
