@@ -275,6 +275,13 @@ input, textarea, button, select { user-select: auto; -webkit-user-select: auto; 
   margin-top: 6px;
 }
 
+.app-version {
+  font-size: 11px;
+  color: #666;
+  margin-top: 12px;
+  text-align: center;
+}
+
 /* === 帮助弹窗 === */
 .help-modal {
   position: fixed;

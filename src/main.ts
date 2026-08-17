@@ -200,6 +200,18 @@ function showStatus(msg: string) {
   setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 3000);
 }
 
+// Visible version marker so users can verify which build they installed
+// (download caching of the old apk made it look like nothing changed).
+const APP_VERSION = 'v1.0.8';
+function renderVersion() {
+  const el = document.getElementById('appVersion');
+  if (el) {
+    const d = new Date();
+    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    el.textContent = `词悬浮 ${APP_VERSION} · 构建 ${ds}`;
+  }
+}
+
 function switchPrompt(idx: number) {
   if (idx < 0 || idx >= state.prompts.length) return;
   if (idx === state.currentIndex) return;
@@ -375,6 +387,7 @@ function updatePlayPauseButton() {
 }
 
 paintUI();
+renderVersion();
 
 $('closeBtn').addEventListener('click', () => invoke('exit_app'));
 
