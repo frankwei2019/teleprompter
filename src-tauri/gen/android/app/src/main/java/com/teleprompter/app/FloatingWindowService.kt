@@ -29,6 +29,10 @@ class FloatingWindowService : Service() {
   private var floatingView: View? = null
   private var params: WindowManager.LayoutParams? = null
 
+  // Mini round icon ("秒剪"-style floating ball) that restores the main window.
+  private var iconView: View? = null
+  private var iconParams: WindowManager.LayoutParams? = null
+
   // state
   private var text: String = ""
   private var fontSize: Int = 36
@@ -151,6 +155,10 @@ class FloatingWindowService : Service() {
       updateContent()
     } else {
       updateContent()
+    }
+    // Show the mini restore icon alongside the overlay.
+    if (iconView == null) {
+      createMiniIcon()
     }
     // Auto-start scrolling so the overlay immediately behaves like the main UI.
     scrolling = true
@@ -281,6 +289,85 @@ class FloatingWindowService : Service() {
     scrollHandler.post(scrollTick)
   }
 
+  // A small draggable round icon ("秒剪"-style floating ball). Tapping it
+  // brings the main window back to the foreground.
+  private fun createMiniIcon() {
+    val wm = windowManager ?: return
+    val size = dp(44)
+    val icon = TextView(this).apply {
+      text = "词"
+      setTextColor(Color.WHITE)
+      setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+      gravity = Gravity.CENTER
+      setPadding(dp(2), dp(2), dp(2), dp(2))
+    }
+    // Round dark circle with a white ring ("秒剪"-style floating ball).
+    val bg = android.graphics.drawable.GradientDrawable().apply {
+      shape = android.graphics.drawable.GradientDrawable.OVAL
+      setColor(0xCC333333.toInt())
+      setStroke(dp(1), Color.WHITE)
+    }
+    icon.background = bg
+
+    val lp = WindowManager.LayoutParams(
+      size, size,
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+      else
+        WindowManager.LayoutParams.TYPE_PHONE,
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+      PixelFormat.TRANSLUCENT
+    ).apply {
+      gravity = Gravity.END or Gravity.CENTER_VERTICAL
+      x = dp(4)
+      y = 0
+    }
+    iconParams = lp
+    iconView = icon
+
+    icon.setOnClickListener {
+      // Restore the main window (singleTask, so it reuses the existing task)
+      // and exit floating mode so the two windows never stack.
+      val i = Intent(this, MainActivity::class.java).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+      }
+      startActivity(i)
+      stopSelf()
+    }
+    // Draggable, same gesture logic as the overlay's drag handle.
+    var initX = 0
+    var initY = 0
+    var touchX = 0f
+    var touchY = 0f
+    icon.setOnTouchListener { _, event ->
+      when (event.action) {
+        MotionEvent.ACTION_DOWN -> {
+          initX = iconParams?.x ?: 0
+          initY = iconParams?.y ?: 0
+          touchX = event.rawX
+          touchY = event.rawY
+          true
+        }
+        MotionEvent.ACTION_MOVE -> {
+          iconParams?.let { p ->
+            p.x = initX + (event.rawX - touchX).toInt()
+            p.y = initY + (event.rawY - touchY).toInt()
+            windowManager?.updateViewLayout(icon, p)
+          }
+          true
+        }
+        else -> false
+      }
+    }
+    wm.addView(icon, lp)
+  }
+
+  private fun removeMiniIcon() {
+    iconView?.let { runCatching { windowManager?.removeView(it) } }
+    iconView = null
+    iconParams = null
+  }
+
   private fun enableDrag(view: View, handle: View) {
     var initX = 0
     var initY = 0
@@ -345,6 +432,7 @@ class FloatingWindowService : Service() {
 
   override fun onDestroy() {
     scrollHandler.removeCallbacks(scrollTick)
+    removeMiniIcon()
     floatingView?.let { runCatching { windowManager?.removeView(it) } }
     floatingView = null
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {

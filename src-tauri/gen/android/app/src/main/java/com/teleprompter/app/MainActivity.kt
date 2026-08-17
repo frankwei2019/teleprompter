@@ -1,6 +1,5 @@
 package com.teleprompter.app
 
-import android.app.PictureInPictureParams
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -9,7 +8,6 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
-import android.util.Rational
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import org.json.JSONObject
@@ -67,23 +65,8 @@ class MainActivity : TauriActivity() {
 
   override fun onUserLeaveHint() {
     super.onUserLeaveHint()
-    // Intentionally no automatic PiP on Home: PiP is entered explicitly when
-    // the user taps 悬浮 so the main window shrinks to a corner and the
-    // transparent overlay becomes the primary scrolling surface.
-  }
-
-  private fun enterPiPIfSupported() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      try {
-        val aspect = Rational(9, 16)
-        val params = PictureInPictureParams.Builder()
-          .setAspectRatio(aspect)
-          .build()
-        enterPictureInPictureMode(params)
-      } catch (e: Exception) {
-        Log.w("teleprompter", "enterPiP failed", e)
-      }
-    }
+    // No automatic PiP on Home. The main window is moved to the background only
+    // when the user taps 悬浮; a small floating icon brings it back.
   }
 
   // Floating window entry point — called by Tauri JS via invoke("floating_bridge", ...)
@@ -130,9 +113,9 @@ class MainActivity : TauriActivity() {
         } else {
           startService(intent)
         }
-        // Shrink the main window to a corner PiP so the transparent overlay
-        // becomes the primary surface instead of stacking two fullscreen windows.
-        enterPiPIfSupported()
+        // Send the main window to the background; the overlay service shows a
+        // small round icon that brings it back (like 秒剪's floating ball).
+        moveTaskToBack(true)
         true
       }
       "stop" -> {
