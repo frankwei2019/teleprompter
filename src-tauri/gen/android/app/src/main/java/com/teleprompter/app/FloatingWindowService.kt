@@ -55,7 +55,10 @@ class FloatingWindowService : Service() {
         val now = System.nanoTime()
         val dt = if (lastFrameTime == 0L) 0f else (now - lastFrameTime) / 1_000_000_000f
         lastFrameTime = now
-        scrollOffset += scrollSpeed * dt
+        // scrollSpeed is in dp/s (same units as the main UI's CSS px). translationY
+        // works in physical pixels, so multiply by density for identical speed.
+        val density = resources.displayMetrics.density
+        scrollOffset += scrollSpeed * density * dt
         // Viewport height: the overlay window height. Text starts below the
         // viewport (bottom entry) and scrolls up out of the top, like the main UI.
         val viewport = params?.height ?: 0
@@ -238,7 +241,8 @@ class FloatingWindowService : Service() {
       setText(text)
       gravity = Gravity.CENTER
       setTextColor(parseColorSafe(fontColor))
-      setTextSize(TypedValue.COMPLEX_UNIT_SP, fontSize.toFloat())
+      // DIP matches the main UI's CSS px, so font size and scroll speed look identical.
+      setTextSize(TypedValue.COMPLEX_UNIT_DIP, fontSize.toFloat())
       setLineSpacing(0f, 1.4f)
       typeface = Typeface.DEFAULT_BOLD
       setPadding(dp(4), dp(4), dp(4), dp(4))
@@ -483,7 +487,7 @@ class FloatingWindowService : Service() {
 
   private fun updateContent() {
     tv?.text = text
-    tv?.setTextSize(TypedValue.COMPLEX_UNIT_SP, fontSize.toFloat())
+    tv?.setTextSize(TypedValue.COMPLEX_UNIT_DIP, fontSize.toFloat())
     tv?.setTextColor(parseColorSafe(fontColor))
     // transparencyPercent: 100 = fully transparent -> keep NO background drawable
     // (setBackground(null)), because a transparent drawable can be composited as

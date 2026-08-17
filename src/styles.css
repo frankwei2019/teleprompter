@@ -42,9 +42,9 @@ input, textarea, button, select { user-select: auto; -webkit-user-select: auto; 
 .icon-btn:hover, .icon-btn:active { background: rgba(255, 255, 255, 0.18); }
 .icon-btn.active { background: rgba(74, 158, 255, 0.4); }
 
-/* === 滚动区（吃掉剩余空间，避免底部露出黑色背景条） === */
+/* === 滚动区（与悬浮窗同高：45% 屏高，控制栏紧贴下方） === */
 .scroll-area {
-  flex: 1 1 auto;
+  flex: 0 0 45%;
   min-height: 0;
   overflow: hidden;
   position: relative;
@@ -122,25 +122,19 @@ input, textarea, button, select { user-select: auto; -webkit-user-select: auto; 
 .ctrl-btn.play-pause.playing { background: rgba(251, 191, 36, 0.3); border-color: rgba(251, 191, 36, 0.5); }
 .ctrl-btn.play-pause.playing:active { background: rgba(251, 191, 36, 0.55); }
 
-/* === 设置面板（手机版：打开时浮在下半屏） === */
+/* === 设置面板（接在控制栏下方展开，不再覆盖下半屏） === */
 .settings-panel {
   display: none;
-  position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  flex: 1 1 auto;
+  min-height: 0;
   background: rgba(20, 20, 20, 0.98);
   padding: 12px 16px;
   padding-bottom: calc(12px + env(safe-area-inset-bottom, 0));
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   overflow-y: auto;
-  z-index: 20;
 }
 .settings-panel:not(.collapsed) { display: block; }
-/* 打开设置时，控制栏让位（兼容 :has() + 显式 class 两种方式） */
-body.settings-open .control-bar,
-body:has(.settings-panel:not(.collapsed)) .control-bar { display: none; }
+/* 设置面板在控制栏下方展开，控制栏保留 */
 
 .section { margin-bottom: 12px; }
 .section-title {
