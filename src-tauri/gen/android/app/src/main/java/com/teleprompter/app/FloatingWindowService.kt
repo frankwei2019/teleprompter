@@ -201,34 +201,34 @@ class FloatingWindowService : Service() {
     val dragHandle = TextView(this).apply {
       text = "≡"
       setTextColor(Color.parseColor("#ffffff"))
-      setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-      setPadding(dp(8), 0, dp(8), 0)
+      setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+      setPadding(dp(14), 0, dp(14), 0)
       setBackground(null)
       layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
     val btnToggle = Button(this).apply {
       text = "⏸"
       setTextColor(Color.WHITE)
-      setBackground(null)
-      setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-      setPadding(dp(4), 0, dp(4), 0)
+      setBackgroundColor(0x33FFFFFF.toInt())
+      setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+      setPadding(dp(14), 0, dp(14), 0)
       setOnClickListener { toggleScroll() }
     }
     this@FloatingWindowService.btnToggle = btnToggle
     val btnReset = Button(this).apply {
       text = "↻"
       setTextColor(Color.WHITE)
-      setBackground(null)
-      setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-      setPadding(dp(4), 0, dp(4), 0)
+      setBackgroundColor(0x33FFFFFF.toInt())
+      setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+      setPadding(dp(14), 0, dp(14), 0)
       setOnClickListener { startResetCountdown() }
     }
     val btnClose = Button(this).apply {
       text = "×"
       setTextColor(Color.WHITE)
-      setBackground(null)
-      setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-      setPadding(dp(4), 0, dp(4), 0)
+      setBackgroundColor(0x33FFFFFF.toInt())
+      setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+      setPadding(dp(14), 0, dp(14), 0)
       setOnClickListener { stopSelf() }
     }
     topBar.addView(dragHandle)
@@ -251,7 +251,7 @@ class FloatingWindowService : Service() {
     }
     textView = tv
 
-    content.addView(topBar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(36)))
+    content.addView(topBar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52)))
     // Wrap content height so long scripts scroll fully instead of being clipped
     // to a fixed region; position it below the viewport to start from the bottom.
     content.addView(
@@ -325,11 +325,11 @@ class FloatingWindowService : Service() {
   // brings the main window back to the foreground.
   private fun createMiniIcon() {
     val wm = windowManager ?: return
-    val size = dp(44)
+    val size = dp(52)
     val icon = TextView(this).apply {
       text = "词"
       setTextColor(Color.WHITE)
-      setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+      setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
       gravity = Gravity.CENTER
       setPadding(dp(2), dp(2), dp(2), dp(2))
     }
