@@ -204,7 +204,7 @@ function showStatus(msg: string) {
 // (download caching of the old apk made it look like nothing changed).
 // APP_VERSION and BUILD_DATE are hardcoded at build time — the date is NOT the
 // runtime clock, so a user can trust it reflects the actual packaged build.
-const APP_VERSION = 'v1.2.0';
+const APP_VERSION = 'v1.5.0';
 const BUILD_DATE = '2026-08-18';
 function renderVersion() {
   const el = document.getElementById('appVersion');
