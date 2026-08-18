@@ -289,6 +289,61 @@ let scrollOffset = 0;
 let lastFrameTime = 0;
 let rafId: number | null = null;
 
+// --- Display-area interaction: click to pause/resume, drag up/down to fast-scroll ---
+let pointerDown = false;
+let pointerStartY = 0;
+let pointerStartOffset = 0;
+let isPointerDragging = false;
+const DRAG_THRESHOLD = 6;     // px of motion before mousedown becomes a drag
+const DRAG_MULTIPLIER = 1.5;  // drag distance → scroll distance
+
+function paintScrollOffset(): void {
+  const content = $('scrollContent') as HTMLDivElement;
+  const mirror = state.settings.mirrorMode ? ' scaleX(-1)' : '';
+  content.style.transform = `translateY(${-scrollOffset}px)${mirror}`;
+}
+
+function getMaxOffset(): number {
+  const scrollArea = $('scrollArea') as HTMLDivElement;
+  const content = $('scrollContent') as HTMLDivElement;
+  return content.scrollHeight + scrollArea.clientHeight;
+}
+
+function attachScrollInteraction(): void {
+  const scrollAreaEl = $('scrollArea') as HTMLDivElement;
+  scrollAreaEl.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return; // left button only
+    pointerDown = true;
+    isPointerDragging = false;
+    pointerStartY = e.clientY;
+    pointerStartOffset = scrollOffset;
+  });
+  scrollAreaEl.addEventListener('mousemove', (e) => {
+    if (!pointerDown) return;
+    const dy = e.clientY - pointerStartY;
+    if (!isPointerDragging && Math.abs(dy) > DRAG_THRESHOLD) {
+      isPointerDragging = true;
+      pauseScroll(); // drag overrides auto-scroll
+    }
+    if (isPointerDragging) {
+      // Drag up (negative dy) → forward (advance, scrollOffset increases);
+      // drag down → backward (rewind, scrollOffset decreases)
+      const max = getMaxOffset();
+      const next = pointerStartOffset - dy * DRAG_MULTIPLIER;
+      scrollOffset = Math.max(0, Math.min(max, next));
+      paintScrollOffset();
+    }
+  });
+  document.addEventListener('mouseup', () => {
+    if (pointerDown && !isPointerDragging) {
+      // Pure click (no drag) → toggle play/pause
+      togglePlayPause();
+    }
+    pointerDown = false;
+    isPointerDragging = false;
+  });
+}
+
 function step(now: number) {
   if (!scrolling) return;
   const dt = lastFrameTime ? (now - lastFrameTime) / 1000 : 0;
@@ -390,6 +445,7 @@ function updatePlayPauseButton() {
 }
 
 paintUI();
+attachScrollInteraction();
 renderVersion();
 
 $('closeBtn').addEventListener('click', () => invoke('exit_app'));
