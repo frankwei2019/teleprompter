@@ -42,9 +42,9 @@ input, textarea, button, select { user-select: auto; -webkit-user-select: auto; 
 .icon-btn:hover, .icon-btn:active { background: rgba(255, 255, 255, 0.18); }
 .icon-btn.active { background: rgba(74, 158, 255, 0.4); }
 
-/* === 滚动区（与悬浮窗同高：45% 屏高，控制栏紧贴下方） === */
+/* === 滚动区（45% 屏高减去顶栏 44px，底部与悬浮窗齐平） === */
 .scroll-area {
-  flex: 0 0 45%;
+  flex: 0 0 calc(45% - 44px);
   min-height: 0;
   overflow: hidden;
   position: relative;

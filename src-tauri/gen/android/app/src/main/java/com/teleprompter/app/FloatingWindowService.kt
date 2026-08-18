@@ -59,8 +59,10 @@ class FloatingWindowService : Service() {
         // works in physical pixels, so multiply by density for identical speed.
         val density = resources.displayMetrics.density
         scrollOffset += scrollSpeed * density * dt
-        // Viewport height: the overlay window height. Text starts below the
-        // viewport (bottom entry) and scrolls up out of the top, like the main UI.
+        // Text enters from the bottom edge of the window and scrolls upward out
+        // of the top (content is NOT clipped at the content bounds, so lines are
+        // never half-cut; only the window edge clips, which is the natural
+        // teleprompter effect).
         val viewport = params?.height ?: 0
         tv?.translationY = viewport - scrollOffset
         tv?.let {
@@ -168,7 +170,8 @@ class FloatingWindowService : Service() {
     scrolling = true
     lastFrameTime = 0
     if (floatingView != null) {
-      // Reset to the top of the script on every start tap.
+      // Start below the viewport so text enters from the bottom edge and
+      // scrolls upward (teleprompter style).
       scrollOffset = 0f
       val viewport = params?.height ?: 0
       tv?.translationY = viewport.toFloat()
@@ -191,6 +194,9 @@ class FloatingWindowService : Service() {
     val content = LinearLayout(this).apply {
       orientation = LinearLayout.VERTICAL
       setBackground(null)
+      // Critical: don't clip the scrolling text at the content bounds, otherwise
+      // lines get cut off mid-scroll. The window itself provides the clip.
+      clipChildren = false
     }
 
     val topBar = LinearLayout(this).apply {
@@ -470,7 +476,7 @@ class FloatingWindowService : Service() {
           handler.postDelayed(this, 1000)
         } else {
           countdown.visibility = android.view.View.GONE
-          // Reset to top.
+          // Reset to bottom entry (text enters from the bottom edge).
           scrollOffset = 0f
           lastFrameTime = 0
           val viewport = params?.height ?: 0
