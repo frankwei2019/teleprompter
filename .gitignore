@@ -23,6 +23,9 @@ src-tauri/gen/android/app/src/main/java/com/teleprompter/*
 src-tauri/gen/android/app/src/main/java/com/teleprompter/app/*
 !src-tauri/gen/android/app/src/main/java/com/teleprompter/app/MainActivity.kt
 !src-tauri/gen/android/app/src/main/java/com/teleprompter/app/FloatingWindowService.kt
+!src-tauri/gen/android/app/src/main/java/com/teleprompter/app/generated/
+src-tauri/gen/android/app/src/main/java/com/teleprompter/app/generated/*
+!src-tauri/gen/android/app/src/main/java/com/teleprompter/app/generated/RustWebView.kt
 !src-tauri/gen/android/app/src/main/AndroidManifest.xml
 
 # Tauri
