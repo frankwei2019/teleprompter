@@ -202,14 +202,19 @@ function showStatus(msg: string) {
 
 // Visible version marker so users can verify which build they installed
 // (download caching of the old apk made it look like nothing changed).
-const APP_VERSION = 'v1.0.8';
+// APP_VERSION and BUILD_DATE are hardcoded at build time — the date is NOT the
+// runtime clock, so a user can trust it reflects the actual packaged build.
+const APP_VERSION = 'v1.0.9';
+const BUILD_DATE = '2026-08-18';
 function renderVersion() {
+  const chip = document.getElementById('versionChip');
+  if (chip) chip.textContent = APP_VERSION;
   const el = document.getElementById('appVersion');
-  if (el) {
-    const d = new Date();
-    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    el.textContent = `词悬浮 ${APP_VERSION} · 构建 ${ds}`;
-  }
+  if (el) el.textContent = `词悬浮 ${APP_VERSION} · 构建 ${BUILD_DATE}`;
+  const helpVer = document.getElementById('helpVersion');
+  if (helpVer) helpVer.textContent = `版本 ${APP_VERSION}`;
+  const bd = document.getElementById('buildDate');
+  if (bd) bd.textContent = BUILD_DATE;
 }
 
 function switchPrompt(idx: number) {
@@ -392,9 +397,8 @@ renderVersion();
 $('closeBtn').addEventListener('click', () => invoke('exit_app'));
 
 $('helpBtn').addEventListener('click', () => {
-  const d = new Date();
-  const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  ($('buildDate') as HTMLSpanElement).textContent = ds;
+  // buildDate is already set by renderVersion() at startup from the hardcoded
+  // BUILD_DATE; do not overwrite it with the runtime clock.
   ($('helpModal') as HTMLDivElement).hidden = false;
 });
 $('helpClose').addEventListener('click', () => {

@@ -27,6 +27,12 @@ input, textarea, button, select { user-select: auto; -webkit-user-select: auto; 
   gap: 6px;
 }
 .drag-spacer { flex: 1; }
+.version-chip {
+  color: #888;
+  font-size: 11px;
+  margin: 0 8px;
+  white-space: nowrap;
+}
 .icon-btn {
   background: rgba(255, 255, 255, 0.06);
   border: none;
