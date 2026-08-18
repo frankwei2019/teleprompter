@@ -10,6 +10,9 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
 import android.graphics.Typeface
 import android.os.Build
 import android.os.IBinder
@@ -50,6 +53,7 @@ class FloatingWindowService : Service() {
   private var lastFrameTime: Long = 0
   private var scrolling: Boolean = false
   private var contentHeight: Float = 0f
+  private var finalContentHeight: Float = 0f  // set once via StaticLayout, never shrinks
   private val scrollHandler = android.os.Handler(android.os.Looper.getMainLooper())
   private val scrollTick: Runnable = object : Runnable {
     override fun run() {
@@ -66,11 +70,16 @@ class FloatingWindowService : Service() {
         // - the last line leaves the top edge when translationY =
         //   -(contentHeight + topBarHeight)
         // - so maxOffset = contentHeight + viewport + topBarHeight
+        //
+        // contentHeight is taken from the TextView's StaticLayout height, which
+        // is the EXACT rendered height of the whole script (every line, every
+        // wrapped line) — never an estimate.
         val viewport = params?.height ?: 0
         tv?.translationY = viewport - scrollOffset
         tv?.let {
-          if (it.lineCount > 0) {
-            contentHeight = (it.lineCount * it.lineHeight + it.paddingTop + it.paddingBottom).toFloat()
+          val layout = it.layout
+          if (layout != null && layout.height > 0) {
+            contentHeight = (layout.height + it.paddingTop + it.paddingBottom).toFloat()
             val maxOffset = contentHeight + viewport + dp(40)
             if (scrollOffset >= maxOffset) {
               scrollOffset = 0f
@@ -239,7 +248,8 @@ class FloatingWindowService : Service() {
 
     // TextView with a very large fixed height: this guarantees the whole script
     // is laid out (no parent AT_MOST cap can truncate it), so every line renders.
-    // We scroll it with translationY; the wrap point is the true text height.
+    // It is a DIRECT child of the FrameLayout with an EXPLICIT pixel height, so
+    // no container can re-measure it with AT_MOST(window height).
     val tv = TextView(this).apply {
       this@FloatingWindowService.tv = this
       setText(text)
@@ -255,30 +265,23 @@ class FloatingWindowService : Service() {
     }
     textView = tv
 
-    // Vertical column: top bar on top, then the tall TextView (scrolled with
-    // translationY). No ScrollView needed.
-    val column = LinearLayout(this).apply {
-      orientation = LinearLayout.VERTICAL
-      setBackground(null)
-      clipChildren = false
-    }
-    column.addView(
-      topBar,
-      LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(40))
-    )
-    column.addView(
-      tv,
-      LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT,
-        20000 // big enough for any script; never AT_MOST-truncated
-      ).apply { topMargin = dp(4) }
-    )
+    // FrameLayout children: drag handle bar pinned to TOP, the tall TextView
+    // below it (scrolled with translationY), control buttons pinned to BOTTOM.
     container.addView(
-      column,
+      topBar,
       android.widget.FrameLayout.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT,
-        ViewGroup.LayoutParams.MATCH_PARENT
+        dp(40),
+        android.view.Gravity.TOP
       )
+    )
+    container.addView(
+      tv,
+      android.widget.FrameLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        20000, // big enough for any script; never AT_MOST-truncated
+        android.view.Gravity.TOP
+      ).apply { topMargin = dp(40) }
     )
     // Control buttons pinned to the bottom edge of the window.
     container.addView(
