@@ -26,10 +26,6 @@ class RustWebView(context: Context, val initScripts: Array<String>, val id: Stri
         settings.databaseEnabled = true
         settings.mediaPlaybackRequiresUserGesture = false
         settings.javaScriptCanOpenWindowsAutomatically = true
-        // Always load the bundled assets fresh: never serve a stale WebView cache
-        // after an app update (this is what made old layouts survive reinstalls).
-        settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-        clearCache(true)
 
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             isDocumentStartScriptEnabled = true
