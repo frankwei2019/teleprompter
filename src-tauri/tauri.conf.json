@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "teleprompter",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "identifier": "com.teleprompter.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -14,10 +14,16 @@
       {
         "label": "main",
         "title": "词悬浮",
-        "width": 800,
+        "width": 1080,
         "height": 480,
-        "minWidth": 400,
-        "minHeight": 200,
+        "minWidth": 600,
+        "minHeight": 300,
+        "x": 240,
+        "y": 80,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": false,
         "resizable": true
       }
     ],

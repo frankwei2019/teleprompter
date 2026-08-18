@@ -444,6 +444,16 @@ function updatePlayPauseButton() {
   btn.classList.toggle('playing', scrolling);
 }
 
+// On Windows desktop, default to the legacy v1.0.0 layout (settings panel
+// collapsed, compact drag-handle/control-bar, transparent background so the
+// window blends with the desktop). Android keeps the modern expanded layout.
+if (typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')) {
+  document.body.classList.add('windows');
+  document.documentElement.classList.add('windows');
+  const sp = $('settingsPanel') as HTMLDivElement | null;
+  if (sp) sp.classList.add('collapsed');
+}
+
 paintUI();
 attachScrollInteraction();
 renderVersion();

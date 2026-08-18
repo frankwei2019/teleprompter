@@ -13,6 +13,215 @@ html, body {
   flex-direction: column;
   position: relative;
 }
+
+/* === Windows 桌面端：恢复 v1.0.0 紧凑"透明悬浮"风格 ===
+ * main.ts 在 Windows 启动时给 body 加 .windows class。
+ * Android 端没有这个 class，沿用上方的现代布局。
+ * 用户的诉求：Windows 端保留原 6.25 (85a34fc) 那个 commit 的样式。
+ */
+body.windows {
+  background: transparent !important;
+}
+html:is(.windows) { background: transparent !important; }
+body.windows .drag-handle {
+  height: 28px;
+  padding: 0 4px;
+  gap: 4px;
+  -webkit-app-region: drag;
+}
+body.windows .drag-spacer { -webkit-app-region: drag; }
+body.windows .icon-btn {
+  -webkit-app-region: no-drag;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 16px;
+  padding: 2px 8px;
+  line-height: 1;
+  border-radius: 4px;
+}
+body.windows .scroll-area { -webkit-app-region: no-drag; }
+body.windows .icon-btn:hover { background: rgba(255, 255, 255, 0.12); }
+body.windows .icon-btn.active { background: rgba(74, 158, 255, 0.4); }
+body.windows .scroll-area {
+  flex: 1;
+  min-height: 60px;
+}
+body.windows .scroll-content {
+  padding: 0 20px;
+}
+body.windows .countdown-overlay {
+  font-size: 220px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+body.windows .ctrl-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 6px 4px;
+  font-size: 12px;
+}
+body.windows .ctrl-btn:hover { background: rgba(255, 255, 255, 0.16); }
+body.windows .control-bar {
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.7);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+body.windows .ctrl-btn.play-pause {
+  font-size: 16px;
+  background: rgba(74, 158, 255, 0.3);
+  border-color: rgba(74, 158, 255, 0.5);
+}
+body.windows .ctrl-btn.play-pause:hover { background: rgba(74, 158, 255, 0.5); }
+body.windows .ctrl-btn.play-pause.playing { background: rgba(251, 191, 36, 0.3); border-color: rgba(251, 191, 36, 0.5); }
+body.windows .settings-panel {
+  flex-shrink: 0;
+  background: rgba(20, 20, 20, 0.92);
+  padding: 10px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  max-height: 60vh;
+  overflow-y: auto;
+  transition: max-height 0.2s ease;
+}
+body.windows .settings-panel.collapsed {
+  max-height: 0;
+  padding: 0 16px;
+  border-top: none;
+  overflow: hidden;
+}
+body.windows .section { margin-bottom: 10px; }
+body.windows .section-title {
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+body.windows .prompts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+body.windows .prompt-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 2px;
+}
+body.windows .prompt-row.active {
+  background: rgba(74, 158, 255, 0.18);
+  border-color: rgba(74, 158, 255, 0.5);
+}
+body.windows .prompt-title {
+  flex: 1;
+  background: transparent;
+  color: white;
+  border: none;
+  text-align: left;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.windows .prompt-title:hover { color: #4a9eff; }
+body.windows .prompt-rename, body.windows .prompt-delete {
+  background: transparent;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 8px 10px;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 4px;
+}
+body.windows .prompt-rename:hover { color: #4a9eff; background: rgba(74, 158, 255, 0.15); }
+body.windows .prompt-delete:hover { color: #f87171; background: rgba(248, 113, 113, 0.15); }
+body.windows .prompt-delete:disabled { opacity: 0.3; cursor: not-allowed; }
+body.windows .add-prompt-btn {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.14);
+  color: white;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 12px;
+  min-height: 44px;
+  cursor: pointer;
+  font-size: 14px;
+}
+body.windows .add-prompt-btn:hover { background: rgba(255, 255, 255, 0.2); }
+body.windows .control-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+body.windows .control-row label { min-width: 100px; font-size: 13px; color: #ccc; }
+body.windows .control-row input[type=range] { flex: 1; min-height: 36px; }
+body.windows .color-swatches {
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  align-items: center;
+}
+body.windows .swatch {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+body.windows .swatch.active { border-color: #4a9eff; }
+body.windows .toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  min-height: 36px;
+}
+body.windows #textInput {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-size: 14px;
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+}
+body.windows .action-buttons { display: flex; gap: 8px; margin-top: 8px; }
+body.windows .action-buttons button {
+  flex: 1;
+  background: rgba(74, 158, 255, 0.33);
+  color: white;
+  border: 1px solid rgba(74, 158, 255, 0.4);
+  border-radius: 4px;
+  padding: 12px 8px;
+  min-height: 44px;
+  cursor: pointer;
+  font-size: 14px;
+}
+body.windows .action-buttons button:hover { background: rgba(74, 158, 255, 0.66); }
+body.windows .status {
+  font-size: 12px;
+  color: #aaa;
+  min-height: 16px;
+  margin-top: 6px;
+}
 input, textarea, button, select { user-select: auto; -webkit-user-select: auto; touch-action: manipulation; }
 
 /* === 顶部条 === */
