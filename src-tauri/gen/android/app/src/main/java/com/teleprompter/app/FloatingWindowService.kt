@@ -59,16 +59,19 @@ class FloatingWindowService : Service() {
         lastFrameTime = now
         val density = resources.displayMetrics.density
         scrollOffset += scrollSpeed * density * dt
-        // Text enters from the bottom edge of the window and scrolls upward out
-        // of the top (teleprompter style). The TextView is 20000px tall so the
-        // full script is laid out; contentHeight is the REAL text height
-        // (lineCount * lineHeight), used as the wrap point.
+        // Text enters from the bottom edge of the window and scrolls upward.
+        // The wrap point must let the LAST line scroll OUT of the top edge of
+        // the window (past the drag handle bar) before looping back to the top.
+        // - translationY starts at viewport (text fully below the window)
+        // - the last line leaves the top edge when translationY =
+        //   -(contentHeight + topBarHeight)
+        // - so maxOffset = contentHeight + viewport + topBarHeight
         val viewport = params?.height ?: 0
         tv?.translationY = viewport - scrollOffset
         tv?.let {
           if (it.lineCount > 0) {
             contentHeight = (it.lineCount * it.lineHeight + it.paddingTop + it.paddingBottom).toFloat()
-            val maxOffset = contentHeight + viewport
+            val maxOffset = contentHeight + viewport + dp(40)
             if (scrollOffset >= maxOffset) {
               scrollOffset = 0f
             }
@@ -219,10 +222,20 @@ class FloatingWindowService : Service() {
       setPadding(dp(14), 0, dp(14), 0)
       setOnClickListener { stopSelf() }
     }
+    // Top bar: only the drag handle (≡) so the whole top edge stays draggable.
     topBar.addView(dragHandle)
-    topBar.addView(btnReset)
-    topBar.addView(btnToggle)
-    topBar.addView(btnClose)
+
+    // Bottom bar: the 3 control buttons, fixed at the bottom edge of the window
+    // (thumb-friendly). Placed with FrameLayout gravity=BOTTOM so it overlays
+    // the bottom of the scrolling text area.
+    val bottomBar = LinearLayout(this).apply {
+      orientation = LinearLayout.HORIZONTAL
+      gravity = Gravity.CENTER
+      setBackgroundColor(0x33000000.toInt())
+    }
+    bottomBar.addView(btnReset)
+    bottomBar.addView(btnToggle)
+    bottomBar.addView(btnClose)
 
     // TextView with a very large fixed height: this guarantees the whole script
     // is laid out (no parent AT_MOST cap can truncate it), so every line renders.
@@ -251,7 +264,7 @@ class FloatingWindowService : Service() {
     }
     column.addView(
       topBar,
-      LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52))
+      LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(40))
     )
     column.addView(
       tv,
@@ -265,6 +278,15 @@ class FloatingWindowService : Service() {
       android.widget.FrameLayout.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT,
         ViewGroup.LayoutParams.MATCH_PARENT
+      )
+    )
+    // Control buttons pinned to the bottom edge of the window.
+    container.addView(
+      bottomBar,
+      android.widget.FrameLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        dp(52),
+        android.view.Gravity.BOTTOM
       )
     )
 
