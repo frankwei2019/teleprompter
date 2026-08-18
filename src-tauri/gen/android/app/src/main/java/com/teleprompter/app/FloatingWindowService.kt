@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Color
@@ -48,6 +49,7 @@ class FloatingWindowService : Service() {
   private var scrollOffset: Float = 0f
   private var lastFrameTime: Long = 0
   private var scrolling: Boolean = false
+  private var contentHeight: Float = 0f
   private val scrollHandler = android.os.Handler(android.os.Looper.getMainLooper())
   private val scrollTick: Runnable = object : Runnable {
     override fun run() {
@@ -55,21 +57,18 @@ class FloatingWindowService : Service() {
         val now = System.nanoTime()
         val dt = if (lastFrameTime == 0L) 0f else (now - lastFrameTime) / 1_000_000_000f
         lastFrameTime = now
-        // scrollSpeed is in dp/s (same units as the main UI's CSS px). translationY
-        // works in physical pixels, so multiply by density for identical speed.
         val density = resources.displayMetrics.density
         scrollOffset += scrollSpeed * density * dt
         // Text enters from the bottom edge of the window and scrolls upward out
-        // of the top (content is NOT clipped at the content bounds, so lines are
-        // never half-cut; only the window edge clips, which is the natural
-        // teleprompter effect).
+        // of the top (teleprompter style). The TextView is 20000px tall so the
+        // full script is laid out; contentHeight is the REAL text height
+        // (lineCount * lineHeight), used as the wrap point.
         val viewport = params?.height ?: 0
         tv?.translationY = viewport - scrollOffset
         tv?.let {
-          // Only loop once the text height is known (post-layout); otherwise the
-          // first frames would wrongly reset to the top.
-          if (it.height > 0) {
-            val maxOffset = it.height.toFloat() + viewport
+          if (it.lineCount > 0) {
+            contentHeight = (it.lineCount * it.lineHeight + it.paddingTop + it.paddingBottom).toFloat()
+            val maxOffset = contentHeight + viewport
             if (scrollOffset >= maxOffset) {
               scrollOffset = 0f
             }
@@ -156,49 +155,32 @@ class FloatingWindowService : Service() {
     }
     if (floatingView == null) {
       createFloatingView()
-      // Apply background/text settings on first creation too, so a fully
-      // transparent background actually shows transparent.
       updateContent()
     } else {
       updateContent()
     }
-    // Show the mini restore icon alongside the overlay.
     if (iconView == null) {
       createMiniIcon()
     }
-    // Auto-start scrolling so the overlay immediately behaves like the main UI.
-    scrolling = true
+    // Start with text below the viewport (bottom entry).
+    scrollOffset = 0f
     lastFrameTime = 0
-    if (floatingView != null) {
-      // Start below the viewport so text enters from the bottom edge and
-      // scrolls upward (teleprompter style).
-      scrollOffset = 0f
-      val viewport = params?.height ?: 0
-      tv?.translationY = viewport.toFloat()
-    }
+    val viewport = params?.height ?: 0
+    tv?.translationY = viewport.toFloat()
+    scrolling = true
     return START_NOT_STICKY
   }
 
   private fun createFloatingView() {
     val wm = windowManager ?: return
-    // FrameLayout so a countdown number can be layered on top of the content.
+    // Outer FrameLayout: allows a countdown number to be layered on top.
     val container = android.widget.FrameLayout(this).apply {
-      // 关键：setBackground(null) 让 view 真没背景
-      // （setBackgroundColor(TRANSPARENT) 会画一个透明 drawable，某些 Android 版本会被合成成黑）
       setBackground(null)
-      // Let the text scroll past the container bounds; the window itself clips.
       clipChildren = false
     }
     containerView = container
 
-    val content = LinearLayout(this).apply {
-      orientation = LinearLayout.VERTICAL
-      setBackground(null)
-      // Critical: don't clip the scrolling text at the content bounds, otherwise
-      // lines get cut off mid-scroll. The window itself provides the clip.
-      clipChildren = false
-    }
-
+    // Top control bar (drag handle + reset + play/pause + close).
     val topBar = LinearLayout(this).apply {
       orientation = LinearLayout.HORIZONTAL
       gravity = Gravity.CENTER_VERTICAL
@@ -242,31 +224,44 @@ class FloatingWindowService : Service() {
     topBar.addView(btnToggle)
     topBar.addView(btnClose)
 
+    // TextView with a very large fixed height: this guarantees the whole script
+    // is laid out (no parent AT_MOST cap can truncate it), so every line renders.
+    // We scroll it with translationY; the wrap point is the true text height.
     val tv = TextView(this).apply {
       this@FloatingWindowService.tv = this
       setText(text)
-      gravity = Gravity.CENTER
+      gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
       setTextColor(parseColorSafe(fontColor))
       // DIP matches the main UI's CSS px, so font size and scroll speed look identical.
       setTextSize(TypedValue.COMPLEX_UNIT_DIP, fontSize.toFloat())
       setLineSpacing(0f, 1.4f)
       typeface = Typeface.DEFAULT_BOLD
-      setPadding(dp(4), dp(4), dp(4), dp(4))
+      setPadding(dp(16), dp(8), dp(16), dp(16))
       setBackground(null)
       setShadowLayer(2f, 1f, 1f, Color.BLACK)
     }
     textView = tv
 
-    content.addView(topBar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52)))
-    // Wrap content height so long scripts scroll fully instead of being clipped
-    // to a fixed region; position it below the viewport to start from the bottom.
-    content.addView(
+    // Vertical column: top bar on top, then the tall TextView (scrolled with
+    // translationY). No ScrollView needed.
+    val column = LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL
+      setBackground(null)
+      clipChildren = false
+    }
+    column.addView(
+      topBar,
+      LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52))
+    )
+    column.addView(
       tv,
-      LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        .apply { topMargin = dp(4) }
+      LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT,
+        20000 // big enough for any script; never AT_MOST-truncated
+      ).apply { topMargin = dp(4) }
     )
     container.addView(
-      content,
+      column,
       android.widget.FrameLayout.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT,
         ViewGroup.LayoutParams.MATCH_PARENT
@@ -324,11 +319,123 @@ class FloatingWindowService : Service() {
     wm.addView(container, lp)
     enableDrag(container, dragHandle)
 
+    // Start the scrolling loop.
     scrollHandler.post(scrollTick)
   }
 
-  // A small draggable round icon ("秒剪"-style floating ball). Tapping it
-  // brings the main window back to the foreground.
+  // The ScrollView's scrollTo is the only way to scroll. We do not need an
+  // enableDrag handler on the ScrollView itself — the drag handle TextView at
+  // the top of the window is the drag target for moving the whole window.
+  private fun enableDrag(window: View, handle: View) {
+    var initX = 0
+    var initY = 0
+    var touchX = 0f
+    var touchY = 0f
+    handle.setOnTouchListener { _, event ->
+      when (event.action) {
+        MotionEvent.ACTION_DOWN -> {
+          initX = params?.x ?: 0
+          initY = params?.y ?: 0
+          touchX = event.rawX
+          touchY = event.rawY
+          true
+        }
+        MotionEvent.ACTION_MOVE -> {
+          params?.let { p ->
+            p.x = initX + (event.rawX - touchX).toInt()
+            p.y = initY + (event.rawY - touchY).toInt()
+            windowManager?.updateViewLayout(window, p)
+          }
+          true
+        }
+        else -> false
+      }
+    }
+  }
+
+  private fun toggleScroll() {
+    if (text.isBlank()) {
+      statusView?.text = "无文本"
+      return
+    }
+    scrolling = !scrolling
+    if (scrolling) lastFrameTime = 0
+    btnToggle?.text = if (scrolling) "⏸" else "▶"
+    // statusView is removed with this layout; skip.
+  }
+
+  // 3-second countdown then reset to bottom and keep scrolling, like the main UI.
+  private fun startResetCountdown() {
+    scrolling = false
+    btnToggle?.text = "▶"
+    val countdown = countdownView ?: return
+    countdown.visibility = android.view.View.VISIBLE
+    val totalTicks = 3
+    var tick = 0
+    val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    val runnable = object : Runnable {
+      override fun run() {
+        tick++
+        if (tick < totalTicks) {
+          countdown.text = (totalTicks - tick).toString()
+          handler.postDelayed(this, 1000)
+        } else {
+          countdown.visibility = android.view.View.GONE
+          // Reset to bottom entry (text enters from the bottom edge).
+          scrollOffset = 0f
+          lastFrameTime = 0
+          val viewport = params?.height ?: 0
+          tv?.translationY = viewport.toFloat()
+          scrolling = true
+          btnToggle?.text = "⏸"
+        }
+      }
+    }
+    countdown.text = totalTicks.toString()
+    handler.postDelayed(runnable, 1000)
+  }
+
+  private fun updateContent() {
+    tv?.text = text
+    tv?.setTextSize(TypedValue.COMPLEX_UNIT_DIP, fontSize.toFloat())
+    tv?.setTextColor(parseColorSafe(fontColor))
+    // The 20000px TextView lays out the whole script automatically; reset the
+    // scroll to the bottom so the next scroll starts from the very end.
+    scrollOffset = 0f
+    lastFrameTime = 0
+    val viewport = params?.height ?: 0
+    tv?.translationY = viewport.toFloat()
+    if (bgAlpha >= 100) {
+      containerView?.setBackground(null)
+    } else {
+      containerView?.setBackgroundColor(adjustAlpha(Color.BLACK, bgAlpha))
+    }
+  }
+
+  private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+  private fun parseColorSafe(c: String): Int = try { Color.parseColor(c) } catch (e: Exception) { Color.WHITE }
+
+  private fun adjustAlpha(color: Int, transparencyPercent: Int): Int {
+    // transparencyPercent: 0 = 全黑不透明, 100 = 完全透明（无背景）
+    val a = (255 * (1f - transparencyPercent / 100f)).toInt().coerceIn(0, 255)
+    return Color.argb(a, Color.red(color), Color.green(color), Color.blue(color))
+  }
+
+  override fun onDestroy() {
+    scrollHandler.removeCallbacks(scrollTick)
+    removeMiniIcon()
+    floatingView?.let { runCatching { windowManager?.removeView(it) } }
+    floatingView = null
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+      stopForeground(STOP_FOREGROUND_REMOVE)
+    } else {
+      @Suppress("DEPRECATION")
+      stopForeground(true)
+    }
+    super.onDestroy()
+  }
+
   private fun createMiniIcon() {
     val wm = windowManager ?: return
     val size = dp(52)
@@ -363,9 +470,16 @@ class FloatingWindowService : Service() {
     iconParams = lp
     iconView = icon
 
-    // Tap = restore main window; drag = move the ball. Handle both in one
-    // touch listener (a separate OnClickListener never fires because the
-    // OnTouchListener consumes ACTION_DOWN).
+    // Tap -> restore the main window (singleTask, so it reuses the existing task)
+    // and exit floating mode so the two windows never stack.
+    val i = Intent(this, MainActivity::class.java).apply {
+      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+    }
+    icon.setOnClickListener {
+      startActivity(i)
+      stopSelf()
+    }
+    // Draggable, same gesture logic as the overlay's drag handle.
     var initX = 0
     var initY = 0
     var touchX = 0f
@@ -399,12 +513,10 @@ class FloatingWindowService : Service() {
         }
         MotionEvent.ACTION_UP -> {
           if (!dragging) {
-            // Restore the main window (singleTask, so it reuses the existing task)
-            // and exit floating mode so the two windows never stack.
-            val i = Intent(this, MainActivity::class.java).apply {
+            val ii = Intent(this, MainActivity::class.java).apply {
               addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             }
-            startActivity(i)
+            startActivity(ii)
             stopSelf()
           }
           true
@@ -419,114 +531,6 @@ class FloatingWindowService : Service() {
     iconView?.let { runCatching { windowManager?.removeView(it) } }
     iconView = null
     iconParams = null
-  }
-
-  private fun enableDrag(view: View, handle: View) {
-    var initX = 0
-    var initY = 0
-    var touchX = 0f
-    var touchY = 0f
-    handle.setOnTouchListener { _, event ->
-      when (event.action) {
-        MotionEvent.ACTION_DOWN -> {
-          initX = params?.x ?: 0
-          initY = params?.y ?: 0
-          touchX = event.rawX
-          touchY = event.rawY
-          true
-        }
-        MotionEvent.ACTION_MOVE -> {
-          params?.let { p ->
-            p.x = initX + (event.rawX - touchX).toInt()
-            p.y = initY + (event.rawY - touchY).toInt()
-            windowManager?.updateViewLayout(view, p)
-          }
-          true
-        }
-        else -> false
-      }
-    }
-  }
-
-  private fun toggleScroll() {
-    if (text.isBlank()) {
-      statusView?.text = "无文本"
-      return
-    }
-    scrolling = !scrolling
-    if (scrolling) lastFrameTime = 0
-    btnToggle?.text = if (scrolling) "⏸" else "▶"
-    statusView?.text = if (scrolling) "播放中" else "已暂停"
-  }
-
-  // 3-second countdown then reset to top and keep scrolling, like the main UI.
-  private fun startResetCountdown() {
-    scrolling = false
-    btnToggle?.text = "▶"
-    val countdown = countdownView ?: return
-    countdown.visibility = android.view.View.VISIBLE
-    val totalTicks = 3
-    var tick = 0
-    val handler = android.os.Handler(android.os.Looper.getMainLooper())
-    val runnable = object : Runnable {
-      override fun run() {
-        tick++
-        if (tick < totalTicks) {
-          countdown.text = (totalTicks - tick).toString()
-          handler.postDelayed(this, 1000)
-        } else {
-          countdown.visibility = android.view.View.GONE
-          // Reset to bottom entry (text enters from the bottom edge).
-          scrollOffset = 0f
-          lastFrameTime = 0
-          val viewport = params?.height ?: 0
-          tv?.translationY = viewport.toFloat()
-          // Keep scrolling after the countdown (was already running before reset).
-          scrolling = true
-          btnToggle?.text = "⏸"
-        }
-      }
-    }
-    countdown.text = totalTicks.toString()
-    handler.postDelayed(runnable, 1000)
-  }
-
-  private fun updateContent() {
-    tv?.text = text
-    tv?.setTextSize(TypedValue.COMPLEX_UNIT_DIP, fontSize.toFloat())
-    tv?.setTextColor(parseColorSafe(fontColor))
-    // transparencyPercent: 100 = fully transparent -> keep NO background drawable
-    // (setBackground(null)), because a transparent drawable can be composited as
-    // black on some ROMs. 0 = fully opaque black.
-    if (bgAlpha >= 100) {
-      containerView?.setBackground(null)
-    } else {
-      containerView?.setBackgroundColor(adjustAlpha(Color.BLACK, bgAlpha))
-    }
-  }
-
-  private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
-
-  private fun parseColorSafe(c: String): Int = try { Color.parseColor(c) } catch (e: Exception) { Color.WHITE }
-
-  private fun adjustAlpha(color: Int, transparencyPercent: Int): Int {
-    // transparencyPercent: 0 = 全黑不透明, 100 = 完全透明（无背景）
-    val a = (255 * (1f - transparencyPercent / 100f)).toInt().coerceIn(0, 255)
-    return Color.argb(a, Color.red(color), Color.green(color), Color.blue(color))
-  }
-
-  override fun onDestroy() {
-    scrollHandler.removeCallbacks(scrollTick)
-    removeMiniIcon()
-    floatingView?.let { runCatching { windowManager?.removeView(it) } }
-    floatingView = null
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-      stopForeground(STOP_FOREGROUND_REMOVE)
-    } else {
-      @Suppress("DEPRECATION")
-      stopForeground(true)
-    }
-    super.onDestroy()
   }
 
   companion object {
