@@ -54,6 +54,14 @@ class FloatingWindowService : Service() {
   private var scrolling: Boolean = false
   private var contentHeight: Float = 0f
   private var finalContentHeight: Float = 0f  // set once via StaticLayout, never shrinks
+  // Touch interaction state for the scrolling text area:
+  // ACTION_DOWN records the start, ACTION_MOVE drags (faster than auto-scroll),
+  // ACTION_UP without a drag toggles play/pause.
+  private var pointerDown: Boolean = false
+  private var pointerStartY: Float = 0f
+  private var pointerStartOffset: Float = 0f
+  private var isDragging: Boolean = false
+  private val DRAG_THRESHOLD: Int = 6  // px of motion before DOWN becomes a drag
   private val scrollHandler = android.os.Handler(android.os.Looper.getMainLooper())
   private val scrollTick: Runnable = object : Runnable {
     override fun run() {
@@ -264,6 +272,58 @@ class FloatingWindowService : Service() {
       setShadowLayer(2f, 1f, 1f, Color.BLACK)
     }
     textView = tv
+
+    // --- Touch interaction for the scrolling text area ---
+    // Single tap (no drag) toggles play/pause.
+    // Vertical drag scrolls the text manually (faster than auto-scroll, and
+    // overrides it for the duration of the drag).
+    tv.setOnTouchListener { _, e ->
+      when (e.actionMasked) {
+        MotionEvent.ACTION_DOWN -> {
+          pointerDown = true
+          isDragging = false
+          pointerStartY = e.rawY
+          pointerStartOffset = scrollOffset
+          // Pause auto-scroll while the user is touching the text — they'll
+          // resume manually by tapping, or we resume on UP if there was no drag.
+          if (scrolling) {
+            scrolling = false
+            btnToggle?.text = "▶"
+          }
+          true
+        }
+        MotionEvent.ACTION_MOVE -> {
+          if (!pointerDown) return@setOnTouchListener false
+          val dy = e.rawY - pointerStartY
+          if (!isDragging && Math.abs(dy) > DRAG_THRESHOLD) {
+            isDragging = true
+          }
+          if (isDragging) {
+            // Drag up (negative dy) -> advance (forward, scrollOffset increases);
+            // drag down (positive dy) -> rewind (scrollOffset decreases).
+            scrollOffset = (pointerStartOffset - dy).coerceAtLeast(0f)
+            val vp = params?.height ?: 0
+            tv.translationY = vp - scrollOffset
+          }
+          true
+        }
+        MotionEvent.ACTION_UP -> {
+          if (pointerDown && !isDragging) {
+            // Pure tap (no drag) -> toggle play/pause
+            toggleScroll()
+          }
+          pointerDown = false
+          isDragging = false
+          true
+        }
+        MotionEvent.ACTION_CANCEL -> {
+          pointerDown = false
+          isDragging = false
+          true
+        }
+        else -> false
+      }
+    }
 
     // FrameLayout children: drag handle bar pinned to TOP, the tall TextView
     // below it (scrolled with translationY), control buttons pinned to BOTTOM.

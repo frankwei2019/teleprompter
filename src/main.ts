@@ -311,19 +311,36 @@ function getMaxOffset(): number {
 
 function attachScrollInteraction(): void {
   const scrollAreaEl = $('scrollArea') as HTMLDivElement;
-  scrollAreaEl.addEventListener('mousedown', (e) => {
-    if (e.button !== 0) return; // left button only
+  // Pointer Events handle both mouse and touch in one code path. Android
+  // WebView does NOT fire mousedown on touch, so the original mouse-only
+  // listeners were inert on phones — using pointer events fixes both.
+  scrollAreaEl.addEventListener('pointerdown', (e) => {
+    // Touch on scrollArea: let the WebView scroll natively if the user is
+    // just flicking through text. We only take over on pointerdown for the
+    // PRIMARY button / first finger.
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     pointerDown = true;
     isPointerDragging = false;
     pointerStartY = e.clientY;
     pointerStartOffset = scrollOffset;
+    // Capture so we keep getting move/up events even if the finger leaves
+    // the scrollArea (e.g. over the control bar).
+    try {
+      scrollAreaEl.setPointerCapture(e.pointerId);
+    } catch {
+      // setPointerCapture can throw if the pointer is already released;
+      // safe to ignore.
+    }
   });
-  scrollAreaEl.addEventListener('mousemove', (e) => {
+  scrollAreaEl.addEventListener('pointermove', (e) => {
     if (!pointerDown) return;
     const dy = e.clientY - pointerStartY;
     if (!isPointerDragging && Math.abs(dy) > DRAG_THRESHOLD) {
       isPointerDragging = true;
       pauseScroll(); // drag overrides auto-scroll
+      // Prevent the WebView from interpreting the gesture as a vertical
+      // scroll/swipe once we've taken it over for fast-scroll.
+      e.preventDefault();
     }
     if (isPointerDragging) {
       // Drag up (negative dy) → forward (advance, scrollOffset increases);
@@ -334,14 +351,25 @@ function attachScrollInteraction(): void {
       paintScrollOffset();
     }
   });
-  document.addEventListener('mouseup', () => {
+  const endDrag = (e: PointerEvent) => {
+    if (!pointerDown) return;
+    // Only treat as a tap if the pointer that ended was the one we captured.
+    if (e.pointerId !== undefined) {
+      try { scrollAreaEl.releasePointerCapture(e.pointerId); } catch {}
+    }
     if (pointerDown && !isPointerDragging) {
-      // Pure click (no drag) → toggle play/pause
+      // Pure click/tap (no drag) → toggle play/pause
       togglePlayPause();
     }
     pointerDown = false;
     isPointerDragging = false;
-  });
+  };
+  scrollAreaEl.addEventListener('pointerup', endDrag);
+  scrollAreaEl.addEventListener('pointercancel', endDrag);
+  // Some Android WebViews still fire mouse* events for the very first tap
+  // before the pointer events stream takes over. Keeping these as a no-op
+  // safety net so a stray mousedown doesn't double-toggle.
+  scrollAreaEl.addEventListener('mousedown', (e) => { e.preventDefault(); });
 }
 
 function step(now: number) {
