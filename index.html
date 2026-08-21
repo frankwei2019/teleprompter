@@ -32,6 +32,16 @@
       <button id="helpClose">关闭</button>
     </div>
   </div>
+  <div class="edit-modal" id="editModal" hidden>
+    <div class="edit-content">
+      <div class="edit-header">
+        <span class="edit-title">编辑提示词</span>
+        <button class="edit-close" id="editClose" aria-label="关闭">×</button>
+      </div>
+      <textarea id="editTextarea" placeholder="在此输入或粘贴提示词文本..."></textarea>
+      <div class="edit-status">失焦或点击 × 自动保存</div>
+    </div>
+  </div>
   <div class="scroll-area" id="scrollArea">
     <div class="scroll-content" id="scrollContent"></div>
     <div class="countdown-overlay" id="countdownOverlay" hidden></div>
@@ -90,9 +100,9 @@
     </div>
     <div class="section">
       <div class="section-title">文本</div>
-      <textarea id="textInput" placeholder="在此输入或粘贴提示词文本..." rows="3"></textarea>
       <div class="action-buttons">
         <button id="importBtn">导入文件</button>
+        <span class="action-hint">导入后会自动打开编辑器</span>
       </div>
     </div>
     <div class="status" id="status"></div>

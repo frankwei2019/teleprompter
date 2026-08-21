@@ -167,7 +167,6 @@ function renderControlBar() {
 
 function paintUI() {
   const p = currentPrompt();
-  ($('textInput') as HTMLTextAreaElement).value = p.text;
   ($('scrollContent') as HTMLDivElement).textContent = p.text;
   ($('speedSlider') as HTMLInputElement).value = String(state.settings.scrollSpeed);
   ($('speedValue') as HTMLSpanElement).textContent = String(state.settings.scrollSpeed);
@@ -204,8 +203,8 @@ function showStatus(msg: string) {
 // (download caching of the old apk made it look like nothing changed).
 // APP_VERSION and BUILD_DATE are hardcoded at build time — the date is NOT the
 // runtime clock, so a user can trust it reflects the actual packaged build.
-const APP_VERSION = 'v1.5.1';
-const BUILD_DATE = '2026-08-18';
+const APP_VERSION = 'v1.5.2';
+const BUILD_DATE = '2026-08-21';
 function renderVersion() {
   const el = document.getElementById('appVersion');
   if (el) el.textContent = `词悬浮 ${APP_VERSION} · 构建 ${BUILD_DATE}`;
@@ -218,6 +217,7 @@ function renderVersion() {
 function switchPrompt(idx: number) {
   if (idx < 0 || idx >= state.prompts.length) return;
   if (idx === state.currentIndex) return;
+  if (editingActive) closeEditModal();
   cancelCountdown();
   pauseScroll();
   resetScroll();
@@ -228,6 +228,7 @@ function switchPrompt(idx: number) {
 }
 
 function addPrompt() {
+  if (editingActive) closeEditModal();
   pauseScroll();
   resetScroll();
   const newPrompt: Prompt = { id: genId(), title: '新预设', text: '' };
@@ -297,6 +298,11 @@ let isPointerDragging = false;
 const DRAG_THRESHOLD = 6;     // px of motion before mousedown becomes a drag
 const DRAG_MULTIPLIER = 1.5;  // drag distance → scroll distance
 
+// Double-tap detection: two taps within 350ms and 20px → open edit modal
+let lastTapTime = 0;
+let lastTapX = 0;
+let lastTapY = 0;
+
 function paintScrollOffset(): void {
   const content = $('scrollContent') as HTMLDivElement;
   const mirror = state.settings.mirrorMode ? ' scaleX(-1)' : '';
@@ -358,8 +364,20 @@ function attachScrollInteraction(): void {
       try { scrollAreaEl.releasePointerCapture(e.pointerId); } catch {}
     }
     if (pointerDown && !isPointerDragging) {
-      // Pure click/tap (no drag) → toggle play/pause
-      togglePlayPause();
+      // Pure click/tap (no drag) → check for double-tap → open edit modal;
+      // single tap → toggle play/pause
+      const now = performance.now();
+      const dx = Math.abs(e.clientX - lastTapX);
+      const dy = Math.abs(e.clientY - lastTapY);
+      if (now - lastTapTime < 350 && dx < 20 && dy < 20) {
+        openEditModal();
+        lastTapTime = 0;
+      } else {
+        togglePlayPause();
+        lastTapTime = now;
+        lastTapX = e.clientX;
+        lastTapY = e.clientY;
+      }
     }
     pointerDown = false;
     isPointerDragging = false;
@@ -472,6 +490,44 @@ function updatePlayPauseButton() {
   btn.classList.toggle('playing', scrolling);
 }
 
+// --- Edit modal: double-tap scroll area opens a fullscreen textarea ---
+let editingActive = false;
+
+function saveCurrentText() {
+  const ta = $('editTextarea') as HTMLTextAreaElement;
+  const p = currentPrompt();
+  if (p.text === ta.value) return; // unchanged, skip work
+  p.text = ta.value;
+  ($('scrollContent') as HTMLDivElement).textContent = p.text;
+  if (p.title === '预设 1' || p.title === '新预设' || p.title === '未命名') {
+    p.title = defaultTitle(p.text);
+    renderPromptsList();
+  }
+  saveState(state);
+}
+
+function openEditModal() {
+  if (editingActive) return;
+  editingActive = true;
+  if (scrolling) pauseScroll(); // pause auto-scroll while editing
+  const ta = $('editTextarea') as HTMLTextAreaElement;
+  ta.value = currentPrompt().text;
+  ($('editModal') as HTMLDivElement).hidden = false;
+  // next tick: focus + caret at end so the soft keyboard pops up cleanly
+  setTimeout(() => {
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }, 0);
+}
+
+function closeEditModal() {
+  if (!editingActive) return;
+  saveCurrentText();
+  ($('editModal') as HTMLDivElement).hidden = true;
+  editingActive = false;
+  // do NOT auto-resume scrolling — the user resumes by tapping ▶
+}
+
 // On Windows desktop, default to the legacy v1.0.0 layout (settings panel
 // collapsed, compact drag-handle/control-bar, transparent background so the
 // window blends with the desktop). Android keeps the modern expanded layout.
@@ -505,16 +561,31 @@ $('nextBtn').addEventListener('click', nextPrompt);
 
 $('addPromptBtn').addEventListener('click', addPrompt);
 
-const textInput = $('textInput') as HTMLTextAreaElement;
-textInput.addEventListener('input', () => {
+// Edit modal listeners — replaced settings-panel textarea (commit refactor:
+// double-tap scroll area opens fullscreen textarea).
+$('editTextarea').addEventListener('input', () => {
   const p = currentPrompt();
-  p.text = textInput.value;
+  p.text = ($('editTextarea') as HTMLTextAreaElement).value;
   ($('scrollContent') as HTMLDivElement).textContent = p.text;
   if (p.title === '预设 1' || p.title === '新预设' || p.title === '未命名') {
     p.title = defaultTitle(p.text);
     renderPromptsList();
   }
   saveState(state);
+});
+$('editTextarea').addEventListener('blur', () => {
+  // Already saved on every keystroke; blur just guarantees final state
+  // is captured if the user closed via tapping outside the textarea.
+  saveCurrentText();
+});
+$('editClose').addEventListener('click', closeEditModal);
+$('editModal').addEventListener('click', (e) => {
+  // Close when tapping the dim backdrop, but not when tapping inside the
+  // .edit-content box itself.
+  if (e.target === $('editModal')) closeEditModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (editingActive && e.key === 'Escape') closeEditModal();
 });
 
 function persistAndApply() {
@@ -582,13 +653,18 @@ async function importFile() {
     const p = currentPrompt();
     p.text = text;
     p.title = defaultTitle(text);
-    textInput.value = text;
     ($('scrollContent') as HTMLDivElement).textContent = text;
     resetScroll();
     saveState(state);
     renderPromptsList();
     const filename = selected.split(/[\\/]/).pop() ?? selected;
     showStatus(`已导入 ${filename} → "${p.title}"`);
+    // Auto-open the edit modal so the user can review/edit the imported text
+    openEditModal();
+    const ta = $('editTextarea') as HTMLTextAreaElement;
+    ta.value = text;
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
   } catch (err) {
     showStatus(`读取失败: ${err instanceof Error ? err.message : String(err)}`);
   }

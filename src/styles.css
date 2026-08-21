@@ -533,3 +533,78 @@ input, textarea, button, select { user-select: auto; -webkit-user-select: auto; 
   font-size: 14px;
 }
 #helpClose:active { background: rgba(74, 158, 255, 0.55); }
+
+/* === 编辑提示词弹窗 === */
+.edit-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  z-index: 110;
+  padding: 16px;
+}
+.edit-modal[hidden] { display: none; }
+.edit-content {
+  background: rgba(20, 20, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 16px;
+  width: 100%;
+  max-width: 720px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: white;
+}
+.edit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+.edit-title {
+  font-size: 16px;
+  font-weight: bold;
+}
+.edit-close {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.edit-close:active { background: rgba(255, 255, 255, 0.25); }
+#editTextarea {
+  flex: 1;
+  min-height: 200px;
+  resize: none;
+  background: rgba(0, 0, 0, 0.4);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.6;
+  -webkit-user-select: text;
+  user-select: text;
+}
+#editTextarea:focus {
+  outline: none;
+  border-color: rgba(74, 158, 255, 0.7);
+}
+.edit-status {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #aaa;
+  text-align: center;
+  flex-shrink: 0;
+}
