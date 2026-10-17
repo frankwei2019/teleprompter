@@ -202,17 +202,17 @@ function showStatus(msg: string) {
 
 // Visible version marker so users can verify which build they installed
 // (download caching of the old apk made it look like nothing changed).
-// APP_VERSION and BUILD_DATE are hardcoded at build time — the date is NOT the
-// runtime clock, so a user can trust it reflects the actual packaged build.
+// APP_VERSION is hardcoded; BUILD_DATE is injected at build time via vite define
+// (see src/globals.d.ts) — the date reflects the actual packaged build, never
+// the user's runtime clock.
 const APP_VERSION = 'v1.5.1';
-const BUILD_DATE = '2026-08-22';
 function renderVersion() {
   const el = document.getElementById('appVersion');
-  if (el) el.textContent = `词悬浮 ${APP_VERSION} · 构建 ${BUILD_DATE}`;
+  if (el) el.textContent = `词悬浮 ${APP_VERSION} · 构建 ${__BUILD_DATE__}`;
   const helpVer = document.getElementById('helpVersion');
   if (helpVer) helpVer.textContent = `版本 ${APP_VERSION}`;
   const bd = document.getElementById('buildDate');
-  if (bd) bd.textContent = BUILD_DATE;
+  if (bd) bd.textContent = __BUILD_DATE__;
 }
 
 function switchPrompt(idx: number) {
@@ -489,8 +489,8 @@ renderVersion();
 $('closeBtn').addEventListener('click', () => invoke('exit_app'));
 
 $('helpBtn').addEventListener('click', () => {
-  // buildDate is already set by renderVersion() at startup from the hardcoded
-  // BUILD_DATE; do not overwrite it with the runtime clock.
+  // buildDate is already set by renderVersion() at startup from the build-time
+  // injected __BUILD_DATE__; do not overwrite it with the runtime clock.
   ($('helpModal') as HTMLDivElement).hidden = false;
 });
 $('helpClose').addEventListener('click', () => {
