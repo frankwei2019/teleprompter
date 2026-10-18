@@ -208,13 +208,31 @@ Set-ItemProperty -Path $p -Name 'AllowDevelopmentWithoutDevLicense' -Value 1 -Ty
 
 或：`设置 → 隐私和安全 → 开发者选项 → 开发者模式` 打开。
 
-之后一条命令即可（CLI 会自动带上 `--features custom-protocol`）：
+> ✅ **当前状态：开发者模式已开启并验证通过。**
+> 注册表 `AllowDevelopmentWithoutDevLicense = 1`，随后 `npx tauri android build --target aarch64 --apk` 完整跑通（`exit 0`），日志里出现 `Info symlinking lib ... in jniLibs dir ...` —— 说明那个卡住整个流程的软链步骤已经不再报错。**不需要重新登录/重启**，新起的进程直接生效。
+> 注意：在 DSH 这类受限沙箱里做"能不能建软链"的小实验会失败（沙箱令牌只剩 `SeChangeNotifyPrivilege`，`whoami /priv` 只有一项），这不代表开发者模式没生效 —— 要用真实构建来验证。
 
-```bash
+标准出包流程（CLI 会自动带上 `--features custom-protocol`）：
+
+```powershell
+# 1) 出包（Rust + 前端 + Gradle 一条龙）
 npx tauri android build --target aarch64 --apk
+#    产物：src-tauri\gen\android\app\build\outputs\apk\universal\release\app-universal-release-unsigned.apk
+
+# 2) 签名（本项目 gen/android 没有 keystore.properties，所以 CLI 只会产出 unsigned）
+& "D:\Android\Sdk\build-tools\35.0.0\apksigner.bat" sign `
+  --ks "$env:USERPROFILE\.android\debug.keystore" `
+  --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey `
+  --out release\teleprompter-arm64-v1.5.1.apk `
+  src-tauri\gen\android\app\build\outputs\apk\universal\release\app-universal-release-unsigned.apk
+
+# 3) 自检（必须 RESULT: OK）
+pwsh -File scripts\verify-android-apk.ps1 -ApkPath release\teleprompter-arm64-v1.5.1.apk
 ```
 
-**在没有开发者模式的机器上的绕行方案**（本次实际使用）：
+> 想省掉第 2 步，可以在 `src-tauri/gen/android/keystore.properties`（该文件已被 `gen/android/.gitignore` 忽略，适合放本地凭据）里配置签名，让 Gradle 直接产出已签名包。**不要把 keystore 或密码提交进仓库。**
+
+**历史绕行方案**（开发者模式没开时的退路，保留备查）：
 
 ```powershell
 # 1) 先让 CLI 把 Rust 编译出来（它会在最后的软链步骤失败，但 Rust 产物是好的）
@@ -230,7 +248,7 @@ Copy-Item "src-tauri\target\aarch64-linux-android\release\libteleprompter_lib.so
 cd src-tauri\gen\android
 .\gradlew.bat assembleArm64Release -x rustBuildArm64Release -x rustBuildUniversalRelease --no-daemon
 
-# 4) 用 debug 证书签名（和现有 APK 一致）
+# 4) 签名
 cd ..\..\..
 & "D:\Android\Sdk\build-tools\35.0.0\apksigner.bat" sign `
   --ks "$env:USERPROFILE\.android\debug.keystore" `
@@ -270,12 +288,16 @@ pwsh -File scripts/verify-android-apk.ps1 -ApkPath release\teleprompter-arm64-v1
 
 ![修复后](images/fixed-screen.png)
 
+**最终交付的包**是由官方标准流程产出的（`npx tauri android build --target aarch64 --apk` + `apksigner` 签名，见 5.2），`verify-android-apk.ps1` 判定 `OK`，安装后截图与上面这张**逐字节相同**（sha256 `0d088c66…`）。
+
+> 一次观察到的副作用：在软件渲染的模拟器上，冷启动耗时约 9.4 s，期间系统弹出过 `System UI isn't responding` 的 ANR 对话框（App 本身没有 ANR，也没有崩溃日志）。点 "Wait" 后界面正常。这是模拟器性能问题，升级 NVIDIA 驱动（见 §8.1）后应消失。
+
 ---
 
 ## 7. 防复发清单
 
 - [x] 出包后跑 `scripts/verify-android-apk.ps1`，`RESULT: OK` 才算通过
-- [ ] 打开 Windows 开发者模式（或走 5.2 的绕行流程）
+- [x] 打开 Windows 开发者模式（已开启并验证，见 5.2）
 - [ ] **不要**手工 `cargo build --release` 后拼 APK —— 会漏 `custom-protocol`
 - [ ] **不要**把 `custom-protocol` 写进 `Cargo.toml` 常开 —— 那样 `tauri dev` 也会读内嵌资源，热更新失效；该 feature 交给 CLI 按场景注入
 - [ ] 前端改完重新出包前，确认 app crate 真的重新编译了（`cargo clean -p teleprompter --target aarch64-linux-android` 可以强制）
