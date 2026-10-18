@@ -290,7 +290,7 @@ pwsh -File scripts/verify-android-apk.ps1 -ApkPath release\teleprompter-arm64-v1
 
 **最终交付的包**是由官方标准流程产出的（`npx tauri android build --target aarch64 --apk` + `apksigner` 签名，见 5.2），`verify-android-apk.ps1` 判定 `OK`，安装后截图与上面这张**逐字节相同**（sha256 `0d088c66…`）。
 
-> 一次观察到的副作用：在软件渲染的模拟器上，冷启动耗时约 9.4 s，期间系统弹出过 `System UI isn't responding` 的 ANR 对话框（App 本身没有 ANR，也没有崩溃日志）。点 "Wait" 后界面正常。这是模拟器性能问题，升级 NVIDIA 驱动（见 §8.1）后应消失。
+> 当时在软件渲染下还观察到一个副作用：冷启动耗时约 9.4 s，期间系统弹过 `System UI isn't responding` 的 ANR 对话框（App 本身没有 ANR，也没有崩溃日志）。**升级 NVIDIA 驱动到 617.42 并让模拟器走 host GPU 后，冷启动降到 954 ms，该 ANR 不再出现**（见 §8.1）。
 
 ---
 
@@ -307,9 +307,21 @@ pwsh -File scripts/verify-android-apk.ps1 -ApkPath release\teleprompter-arm64-v1
 
 ## 8. 相关但未在本次处理的遗留事项
 
-1. **模拟器 AVD 的 GPU 配置**
-   `tauri_test` 原来 `hw.gpu.enabled=no`，本次已改为 `yes` / `hw.gpu.mode=auto`（在 `D:\Android\Avd\tauri_test.avd\config.ini`，不在仓库内）。
-   但这台机器的 NVIDIA 驱动是 **527.58**，低于模拟器 host Vulkan 要求的 **553.35**，所以实际仍回落到 `lavapipe` / `SwiftShader` 软件渲染（启动日志：`hasSufficientHostVulkanDriver: unsupported driver version (527.58.0, min required: 553.35.0)`）。画面能出来但偏慢。升级到 553.35+ 后可启用真正的硬件加速。
+1. **模拟器 AVD 的 GPU 配置（已解决）**
+   `tauri_test` 原来 `hw.gpu.enabled=no`，黑屏排查期间改为 `yes`，并把 `hw.gpu.mode` 定为 **`host`**（配置文件 `D:\Android\Avd\tauri_test.avd\config.ini`，不在仓库内）。
+   这台机器原先的 NVIDIA 驱动是 **527.58**，低于模拟器 host Vulkan 要求的 **553.35**，所以一直回落到 `lavapipe` / `SwiftShader` 软件渲染（日志：`hasSufficientHostVulkanDriver: unsupported driver version (527.58.0, min required: 553.35.0)`）。
+   驱动升级到 **617.42**（Studio / DCH / WHQL）后硬件加速真正生效：
+
+   ```
+   emuglConfig_init: vulkan_mode_selected:host gles_mode_selected:host
+   Selecting Vulkan device: NVIDIA GeForce RTX 3050 Laptop GPU, Version: 1.4.351
+   Graphics API Version OpenGL ES 3.0 (4.5.0 NVIDIA 617.42)
+   SurfaceFlinger: GLES ... (NVIDIA GeForce RTX 3050 Laptop GPU/PCIe/SSE2), OpenGL ES 3.1 (4.5.0 NVIDIA 617.42)
+   ```
+
+   效果：App 冷启动 **9,456 ms → 954 ms**（约 10 倍），之前的 `System UI isn't responding` 也不再出现。
+
+   **⚠️ 容易踩的坑：`hw.gpu.mode=auto` 不会选 host。** 驱动装好之后 `auto` 依然落到 `lavapipe`/`SwiftShader`，必须显式设成 `host`（或命令行 `-gpu host`）才会用上 NVIDIA。验证方式就是看上面那三行日志里是不是 `mode_selected:host` 和 `Selecting Vulkan device: NVIDIA ...`。
 
 2. **`vite.config.ts` 与 Tauri `devUrl` 不一致**
    `vite.config.ts:15` 把 dev server 端口固定在 **1421**，而 `src-tauri/tauri.conf.json` 没有配置 `build.devUrl`（Tauri 移动端 dev 模式默认指向 1420）。这不是本次黑屏的原因（release 包根本不走代理），但会让 `tauri dev` 在移动端连不上开发服务器。建议补上：
