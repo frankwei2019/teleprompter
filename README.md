@@ -54,6 +54,21 @@
 - Windows 10 / 11（x64）
 - 约 30 MB 磁盘空间
 
+## Android 版本
+
+Android 版通过 Tauri 打包（arm64-v8a），安装包见 `release/`。
+
+出包、自检与历史问题说明：
+
+- [Android 构建与模拟器黑屏问题](docs/android-build-black-screen.md) —— **出包前请先读这篇**，里面解释了为什么"重新编译了却还是黑屏"，以及正确的出包命令。
+- 出包后自检：
+
+  ```powershell
+  pwsh -File scripts/verify-android-apk.ps1 -ApkPath release\teleprompter-arm64-v1.5.1.apk
+  ```
+
+  只有输出 `RESULT: OK` 的包才可以发布。
+
 ## 开发者
 
 易达AI（AI2026yida)®
