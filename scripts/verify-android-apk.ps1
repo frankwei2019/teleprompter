@@ -177,8 +177,13 @@ try {
     # ------------------------------- check 3: staleness against local dist/
     # Independent of how the APK was packaged: the assets embedded in the native
     # library must match whatever dist/ currently contains.
-    $distAssets = Join-Path $PSScriptRoot '..\dist\assets'
-    if (Test-Path $distAssets) {
+    $distAssets = $null
+    if ($PSScriptRoot) { $distAssets = Join-Path $PSScriptRoot '..\dist\assets' }
+    if (-not $distAssets -or -not (Test-Path $distAssets)) {
+        $cwdDist = Join-Path (Get-Location) 'dist\assets'
+        if (Test-Path $cwdDist) { $distAssets = $cwdDist }
+    }
+    if ($distAssets -and (Test-Path $distAssets)) {
         $local = Get-ChildItem $distAssets -File |
             Where-Object { $_.Name -match '^index-[A-Za-z0-9_\-]+\.(js|css)$' } |
             ForEach-Object { $_.Name } |
