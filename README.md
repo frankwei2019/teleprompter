@@ -60,14 +60,17 @@ Android 版通过 Tauri 打包（arm64-v8a），安装包见 `release/`。
 
 出包、自检与历史问题说明：
 
-- [Android 构建与模拟器黑屏问题](docs/android-build-black-screen.md) —— **出包前请先读这篇**，里面解释了为什么"重新编译了却还是黑屏"，以及正确的出包命令。
+- [Android 构建与验证手册](docs/android-build-and-verify-guide.md) —— **出包前照着做**：出包命令、产物路径、签名、6 关静态自检、模拟器硬件加速判定、空白页定位分叉流程、本机关键路径速查。
+- [Android 构建与模拟器黑屏问题](docs/android-build-black-screen.md) —— 黑屏根因分析：为什么"重新编译了却还是黑屏"，以及它是怎么被发现的。
 - 出包后自检：
 
   ```powershell
-  pwsh -File scripts/verify-android-apk.ps1 -ApkPath release\teleprompter-arm64-v1.5.1.apk
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\verify-android-apk.ps1 -ApkPath release\teleprompter-arm64-v1.5.1.apk
   ```
 
   只有输出 `RESULT: OK` 的包才可以发布。
+
+> 通用流程已沉淀为技能 `building-tauri-android-apks`（含可复用的自检脚本），换项目也能直接用。
 
 ## 开发者
 

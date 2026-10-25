@@ -48,3 +48,6 @@ Thumbs.db
 # APK signing artifacts
 *.idsig
 *.apk.idsig
+
+# Throwaway release archives (local build outputs, never committed)
+release-archive/
