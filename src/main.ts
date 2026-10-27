@@ -112,6 +112,8 @@ export { loadState, saveState, DEFAULT_STATE, SIZES };
 
 const state: PrompterState = loadState();
 
+const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
+
 function currentPrompt(): Prompt {
   return state.prompts[state.currentIndex];
 }
@@ -157,7 +159,13 @@ function renderPromptsList() {
     del.disabled = state.prompts.length <= 1;
     del.addEventListener('click', () => deletePrompt(idx));
 
-    row.append(title, rename, del);
+    const imp = document.createElement('button');
+    imp.className = 'prompt-import';
+    imp.textContent = '📂';
+    imp.title = '导入文件到此预设';
+    imp.addEventListener('click', () => importFile(idx));
+
+    row.append(title, rename, imp, del);
     list.appendChild(row);
   });
 }
@@ -167,7 +175,6 @@ function renderControlBar() {
 
 function paintUI() {
   const p = currentPrompt();
-  ($('textInput') as HTMLTextAreaElement).value = p.text;
   ($('scrollContent') as HTMLDivElement).textContent = p.text;
   ($('speedSlider') as HTMLInputElement).value = String(state.settings.scrollSpeed);
   ($('speedValue') as HTMLSpanElement).textContent = String(state.settings.scrollSpeed);
@@ -205,7 +212,7 @@ function showStatus(msg: string) {
 // APP_VERSION is hardcoded; BUILD_DATE is injected at build time via vite define
 // (see src/globals.d.ts) — the date reflects the actual packaged build, never
 // the user's runtime clock.
-const APP_VERSION = 'v1.5.1';
+const APP_VERSION = 'v1.6.0';
 function renderVersion() {
   const el = document.getElementById('appVersion');
   if (el) el.textContent = `词悬浮 ${APP_VERSION} · 构建 ${__BUILD_DATE__}`;
@@ -218,6 +225,7 @@ function renderVersion() {
 function switchPrompt(idx: number) {
   if (idx < 0 || idx >= state.prompts.length) return;
   if (idx === state.currentIndex) return;
+  syncTextFromScreen();
   cancelCountdown();
   pauseScroll();
   resetScroll();
@@ -228,6 +236,7 @@ function switchPrompt(idx: number) {
 }
 
 function addPrompt() {
+  syncTextFromScreen();
   pauseScroll();
   resetScroll();
   const newPrompt: Prompt = { id: genId(), title: '新预设', text: '' };
@@ -239,6 +248,7 @@ function addPrompt() {
 }
 
 function deletePrompt(idx: number) {
+  syncTextFromScreen();
   if (state.prompts.length <= 1) {
     showStatus('至少保留一个预设');
     return;
@@ -257,6 +267,7 @@ function deletePrompt(idx: number) {
 }
 
 function renamePrompt(idx: number) {
+  syncTextFromScreen();
   const p = state.prompts[idx];
   const next = window.prompt('重命名预设', p.title);
   if (next === null) return;
@@ -284,7 +295,44 @@ function toggleSettings() {
   document.body.classList.toggle('settings-open', !willHide);
 }
 
+// 强制收起设置面板（进入悬浮模式时调用）
+function collapseSettings(): void {
+  const panel = $('settingsPanel') as HTMLDivElement;
+  const btn = $('settingsToggle') as HTMLButtonElement;
+  if (panel.classList.contains('collapsed')) return;
+  panel.classList.add('collapsed');
+  btn.classList.remove('active');
+  document.body.classList.remove('settings-open');
+  ($('scrollArea') as HTMLDivElement).style.flex = '';
+}
+
+// 悬浮按钮外观随 floating 变化（按钮自带 inline style，必须直接改 style 才盖得住）
+// 用「文字 + 配色」双重区分，避免只靠颜色分不清状态
+function updateFloatingButton(): void {
+  const btn = $('startFloatingBtn') as HTMLButtonElement | null;
+  if (!btn) return;
+  if (floating) {
+    btn.textContent = '退出悬浮';
+    // 半透明琥珀底：能透出背后内容，不糊住文字；字改用浅黄保证可读
+    btn.style.background = 'rgba(251, 191, 36, 0.28)';
+    btn.style.borderColor = 'rgba(251, 191, 36, 0.8)';
+    btn.style.color = '#ffd66b';
+    btn.style.fontWeight = 'bold';
+    btn.title = '退出悬浮（停止滚动并进入编辑状态）';
+  } else {
+    btn.textContent = '悬浮';
+    btn.style.background = 'rgba(74, 158, 255, 0.4)';
+    btn.style.borderColor = 'rgba(74, 158, 255, 0.7)';
+    btn.style.color = 'white';
+    btn.style.fontWeight = 'bold';
+    btn.title = '悬浮模式（置顶、收起设置，并直接开始滚动）';
+  }
+}
+
 let scrolling = false;
+// Windows 悬浮模式：窗口置顶 + 设置自动收起 + 播放中（拖动快滚有效）。
+// 退出悬浮时回到编辑态。Android 不使用此标记（那里是系统悬浮窗 + 原窗缩成小圆）。
+let floating = false;
 let scrollOffset = 0;
 let lastFrameTime = 0;
 let rafId: number | null = null;
@@ -315,6 +363,8 @@ function attachScrollInteraction(): void {
   // WebView does NOT fire mousedown on touch, so the original mouse-only
   // listeners were inert on phones — using pointer events fixes both.
   scrollAreaEl.addEventListener('pointerdown', (e) => {
+    // 暂停（编辑）态：把触摸/点击交给浏览器处理（光标、选词、原生滚动），不要抢占
+    if (document.body.classList.contains('editing')) return;
     // Touch on scrollArea: let the WebView scroll natively if the user is
     // just flicking through text. We only take over on pointerdown for the
     // PRIMARY button / first finger.
@@ -337,7 +387,9 @@ function attachScrollInteraction(): void {
     const dy = e.clientY - pointerStartY;
     if (!isPointerDragging && Math.abs(dy) > DRAG_THRESHOLD) {
       isPointerDragging = true;
-      pauseScroll(); // drag overrides auto-scroll
+      // Android 维持原行为；Windows 拖动快滚只暂停自动滚动，不回编辑态
+      if (isWindows) pauseAutoScroll();
+      else pauseScroll(); // drag overrides auto-scroll
       // Prevent the WebView from interpreting the gesture as a vertical
       // scroll/swipe once we've taken it over for fast-scroll.
       e.preventDefault();
@@ -369,7 +421,9 @@ function attachScrollInteraction(): void {
   // Some Android WebViews still fire mouse* events for the very first tap
   // before the pointer events stream takes over. Keeping these as a no-op
   // safety net so a stray mousedown doesn't double-toggle.
-  scrollAreaEl.addEventListener('mousedown', (e) => { e.preventDefault(); });
+  scrollAreaEl.addEventListener('mousedown', (e) => {
+    if (!document.body.classList.contains('editing')) e.preventDefault();
+  });
 }
 
 function step(now: number) {
@@ -394,18 +448,61 @@ function step(now: number) {
   if (scrolling) rafId = requestAnimationFrame(step);
 }
 
+// --- 屏上编辑：暂停时滚动屏变成可直接编辑的文本块，可原生滚动浏览全文；
+// 播放（滚动）时恢复绝对定位 + 位移的显示模式。 ---
+function setEditMode(on: boolean): void {
+  const content = $('scrollContent') as HTMLDivElement;
+  const area = $('scrollArea') as HTMLDivElement;
+  content.contentEditable = on ? 'true' : 'false';
+  document.body.classList.toggle('editing', on);
+  if (on) area.scrollTop = 0;
+  // Windows：一旦回到编辑态就视为退出悬浮，避免按钮状态与实际不一致
+  // （例如悬浮中点屏暂停进入编辑后，再按悬浮键应能重新进入悬浮）
+  if (on && isWindows && floating) {
+    floating = false;
+    updateFloatingButton();
+  }
+}
+
+function syncTextFromScreen(): void {
+  const content = $('scrollContent') as HTMLDivElement;
+  if (content.contentEditable !== 'true') return; // 仅在暂停编辑态生效
+  const p = currentPrompt();
+  let t = content.innerText.replace(/ /g, ' ');
+  t = t.replace(/[\s ]+$/, ''); // 去掉结尾多余空行
+  if (t !== p.text) {
+    p.text = t;
+    if (['预设 1', '新预设', '未命名'].includes(p.title)) {
+      p.title = defaultTitle(p.text);
+      renderPromptsList();
+    }
+    saveState(state);
+  }
+}
+
 function startScroll() {
+  syncTextFromScreen();
   if (!currentPrompt().text.trim()) {
-    showStatus('请输入或导入提示词文本');
+    showStatus('请输入或修改提示词文本');
     return;
   }
   scrolling = true;
   lastFrameTime = 0;
   rafId = requestAnimationFrame(step);
+  setEditMode(false);
   updatePlayPauseButton();
 }
 
 function pauseScroll() {
+  scrolling = false;
+  if (rafId !== null) cancelAnimationFrame(rafId);
+  rafId = null;
+  setEditMode(true);
+  updatePlayPauseButton();
+}
+
+// 仅暂停自动滚动、不进入编辑态——Windows 拖动快滚专用，避免拖动时误回编辑
+function pauseAutoScroll() {
   scrolling = false;
   if (rafId !== null) cancelAnimationFrame(rafId);
   rafId = null;
@@ -475,7 +572,7 @@ function updatePlayPauseButton() {
 // On Windows desktop, default to the legacy v1.0.0 layout (settings panel
 // collapsed, compact drag-handle/control-bar, transparent background so the
 // window blends with the desktop). Android keeps the modern expanded layout.
-if (typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')) {
+if (isWindows) {
   document.body.classList.add('windows');
   document.documentElement.classList.add('windows');
   const sp = $('settingsPanel') as HTMLDivElement | null;
@@ -483,6 +580,7 @@ if (typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows'))
 }
 
 paintUI();
+setEditMode(true);
 attachScrollInteraction();
 renderVersion();
 
@@ -504,18 +602,6 @@ $('playPauseBtn').addEventListener('click', togglePlayPause);
 $('nextBtn').addEventListener('click', nextPrompt);
 
 $('addPromptBtn').addEventListener('click', addPrompt);
-
-const textInput = $('textInput') as HTMLTextAreaElement;
-textInput.addEventListener('input', () => {
-  const p = currentPrompt();
-  p.text = textInput.value;
-  ($('scrollContent') as HTMLDivElement).textContent = p.text;
-  if (p.title === '预设 1' || p.title === '新预设' || p.title === '未命名') {
-    p.title = defaultTitle(p.text);
-    renderPromptsList();
-  }
-  saveState(state);
-});
 
 function persistAndApply() {
   saveState(state);
@@ -564,8 +650,9 @@ loopToggle.addEventListener('change', () => {
   saveState(state);
 });
 
-async function importFile() {
+async function importFile(targetIdx: number) {
   try {
+    syncTextFromScreen();
     const { open } = await import('@tauri-apps/plugin-dialog');
     const { readTextFile } = await import('@tauri-apps/plugin-fs');
     const selected = await open({
@@ -579,14 +666,13 @@ async function importFile() {
       showStatus('文件过大，请使用 ≤1MB 的文件');
       return;
     }
-    const p = currentPrompt();
+    const p = state.prompts[targetIdx];
     p.text = text;
     p.title = defaultTitle(text);
-    textInput.value = text;
-    ($('scrollContent') as HTMLDivElement).textContent = text;
+    state.currentIndex = targetIdx;
     resetScroll();
     saveState(state);
-    renderPromptsList();
+    paintUI();
     const filename = selected.split(/[\\/]/).pop() ?? selected;
     showStatus(`已导入 ${filename} → "${p.title}"`);
   } catch (err) {
@@ -594,12 +680,41 @@ async function importFile() {
   }
 }
 
-$('importBtn').addEventListener('click', importFile);
+// 窗口置顶：单独 try，失败也不影响悬浮状态的切换与按钮反馈
+async function trySetAlwaysOnTop(on: boolean): Promise<void> {
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    await getCurrentWindow().setAlwaysOnTop(on);
+  } catch {
+    if (on) showStatus('提示：窗口置顶未生效（悬浮其余功能正常）');
+  }
+}
 
 async function startFloating() {
+  syncTextFromScreen();
   const p = currentPrompt();
   if (!p.text.trim()) {
     showStatus('请先输入文本');
+    return;
+  }
+  // --- Windows：单窗悬浮模式（始终 1 个窗，置顶播放，不新增悬浮窗）---
+  if (isWindows) {
+    if (!floating) {
+      collapseSettings();            // 自动隐藏设置窗
+      floating = true;
+      scrollOffset = 0;              // 每次进入悬浮都从开头滚
+      paintScrollOffset();
+      startScroll();                 // 立即开始滚动，不用先按播放
+      updateFloatingButton();        // 先更新按钮状态，保证点了就有反馈
+      showStatus('✓ 悬浮模式：设置已收起，正在滚动（拖动可快滚）');
+      void trySetAlwaysOnTop(true);  // 置顶放最后：失败也不影响上面
+    } else {
+      floating = false;
+      pauseScroll();                 // 停止滚动 → 进入编辑状态
+      updateFloatingButton();
+      showStatus('已退出悬浮，进入编辑状态');
+      void trySetAlwaysOnTop(false);
+    }
     return;
   }
   const s = state.settings;
@@ -621,3 +736,4 @@ async function startFloating() {
   }
 }
 $('startFloatingBtn')?.addEventListener('click', startFloating);
+updateFloatingButton();

@@ -75,19 +75,14 @@ body.windows .ctrl-btn.play-pause {
 body.windows .ctrl-btn.play-pause:hover { background: rgba(74, 158, 255, 0.5); }
 body.windows .ctrl-btn.play-pause.playing { background: rgba(251, 191, 36, 0.3); border-color: rgba(251, 191, 36, 0.5); }
 body.windows .settings-panel {
-  flex-shrink: 0;
   background: rgba(20, 20, 20, 0.92);
   padding: 10px 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-  max-height: 60vh;
   overflow-y: auto;
-  transition: max-height 0.2s ease;
 }
-body.windows .settings-panel.collapsed {
-  max-height: 0;
-  padding: 0 16px;
-  border-top: none;
-  overflow: hidden;
+/* 设置打开时：滚动区收缩到上方，设置面板在控制栏下方"长出"，不再挤扁/盖住滚区 */
+body.windows.settings-open .scroll-area {
+  flex: 0 0 40%;
 }
 body.windows .section { margin-bottom: 10px; }
 body.windows .section-title {
@@ -146,6 +141,18 @@ body.windows .prompt-rename, body.windows .prompt-delete {
 body.windows .prompt-rename:hover { color: #4a9eff; background: rgba(74, 158, 255, 0.15); }
 body.windows .prompt-delete:hover { color: #f87171; background: rgba(248, 113, 113, 0.15); }
 body.windows .prompt-delete:disabled { opacity: 0.3; cursor: not-allowed; }
+body.windows .prompt-import {
+  background: transparent;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 8px 10px;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 4px;
+}
+body.windows .prompt-import:hover { color: #4ade80; background: rgba(74, 222, 128, 0.15); }
 body.windows .add-prompt-btn {
   width: 100%;
   background: rgba(255, 255, 255, 0.14);
@@ -191,31 +198,7 @@ body.windows .toggle-label {
   font-size: 14px;
   min-height: 36px;
 }
-body.windows #textInput {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  padding: 10px 12px;
-  font-size: 14px;
-  resize: vertical;
-  min-height: 80px;
-  font-family: inherit;
-}
-body.windows .action-buttons { display: flex; gap: 8px; margin-top: 8px; }
-body.windows .action-buttons button {
-  flex: 1;
-  background: rgba(74, 158, 255, 0.33);
-  color: white;
-  border: 1px solid rgba(74, 158, 255, 0.4);
-  border-radius: 4px;
-  padding: 12px 8px;
-  min-height: 44px;
-  cursor: pointer;
-  font-size: 14px;
-}
-body.windows .action-buttons button:hover { background: rgba(74, 158, 255, 0.66); }
+/* Windows 端：文本输入框与独立导入按钮已移除，编辑改为屏上直接编辑 */
 body.windows .status {
   font-size: 12px;
   color: #aaa;
@@ -451,31 +434,33 @@ input, textarea, button, select { user-select: auto; -webkit-user-select: auto; 
   min-height: 36px;
 }
 
-#textInput {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  padding: 10px 12px;
-  font-size: 14px;
-  resize: vertical;
-  min-height: 80px;
-  font-family: inherit;
+/* 暂停（编辑）态：滚动屏直接变为可编辑文本块，可原生滚动浏览全文 */
+.editing .scroll-content {
+  position: static;
+  transform: none !important;
+  text-align: left;
+  min-height: 100%;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
 }
-.action-buttons { display: flex; gap: 8px; margin-top: 8px; }
-.action-buttons button {
-  flex: 1;
-  background: rgba(74, 158, 255, 0.2);
-  color: white;
-  border: 1px solid rgba(74, 158, 255, 0.4);
-  border-radius: 6px;
-  padding: 12px 8px;
-  min-height: 44px;
+.editing .scroll-area {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+.prompt-import {
+  background: transparent;
+  border: none;
+  color: #aaa;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 16px;
+  padding: 8px 10px;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 4px;
 }
-.action-buttons button:active { background: rgba(74, 158, 255, 0.4); }
+.prompt-import:active { color: #4ade80; background: rgba(74, 222, 128, 0.15); }
 
 .status {
   font-size: 12px;
