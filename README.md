@@ -65,10 +65,13 @@ Android 版通过 Tauri 打包（arm64-v8a），安装包见 `release/`。
 - 出包后自检：
 
   ```powershell
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\verify-android-apk.ps1 -ApkPath release\teleprompter-arm64-v1.5.1.apk
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\verify-android-apk.ps1 -ApkPath release\teleprompter-arm64-v1.6.0.apk
   ```
 
   只有输出 `RESULT: OK` 的包才可以发布。
+
+> **签名说明**：v1.6.0 起改用专用 release 证书（`C:\Users\28658\.android\teleprompter-release.jks`），
+> 不再是 debug 证书 —— 已装 v1.5.1（debug 签名）的设备**无法覆盖升级**，需先卸载旧版再装。
 
 > 通用流程已沉淀为技能 `building-tauri-android-apks`（含可复用的自检脚本），换项目也能直接用。
 
