@@ -15,22 +15,13 @@ type Prompt = {
   text: string;
 };
 
-type WindowSize = 'small' | 'medium' | 'large';
-
 type PrompterState = {
   prompts: Prompt[];
   currentIndex: number;
   settings: PrompterSettings;
-  windowSize: WindowSize;
 };
 
 const STORAGE_KEY = 'prompter-state';
-
-const SIZES: Record<WindowSize, { width: number; height: number; label: string }> = {
-  small:  { width: 600,  height: 400, label: '小' },
-  medium: { width: 800,  height: 480, label: '中' },
-  large:  { width: 1200, height: 720, label: '大' },
-};
 
 const DEFAULT_STATE: PrompterState = {
   prompts: [{ id: 'default', title: '预设 1', text: '' }],
@@ -43,7 +34,6 @@ const DEFAULT_STATE: PrompterState = {
     mirrorMode: false,
     loopPlayback: true,
   },
-  windowSize: 'medium',
 };
 
 function genId(): string {
@@ -62,7 +52,6 @@ function migrate(parsed: any): PrompterState {
       prompts: [{ id: genId(), title: defaultTitle(parsed.text), text: parsed.text }],
       currentIndex: 0,
       settings: { ...DEFAULT_STATE.settings, ...(parsed.settings ?? {}) },
-      windowSize: parsed.windowSize ?? DEFAULT_STATE.windowSize,
     };
   }
   return {
@@ -77,7 +66,6 @@ function migrate(parsed: any): PrompterState {
       ? Math.max(0, Math.min(parsed.currentIndex, (parsed.prompts?.length ?? 1) - 1))
       : 0,
     settings: { ...DEFAULT_STATE.settings, ...(parsed?.settings ?? {}) },
-    windowSize: parsed?.windowSize ?? DEFAULT_STATE.windowSize,
   };
 }
 
@@ -96,7 +84,6 @@ function cloneDefault(): PrompterState {
     prompts: [{ id: genId(), title: '预设 1', text: '' }],
     currentIndex: 0,
     settings: { ...DEFAULT_STATE.settings },
-    windowSize: DEFAULT_STATE.windowSize,
   };
 }
 
@@ -107,8 +94,8 @@ function saveState(s: PrompterState): void {
   }
 }
 
-export type { PrompterSettings, PrompterState, Prompt, WindowSize };
-export { loadState, saveState, DEFAULT_STATE, SIZES };
+export type { PrompterSettings, PrompterState, Prompt };
+export { loadState, saveState, DEFAULT_STATE };
 
 const state: PrompterState = loadState();
 
@@ -170,9 +157,6 @@ function renderPromptsList() {
   });
 }
 
-function renderControlBar() {
-}
-
 function paintUI() {
   const p = currentPrompt();
   ($('scrollContent') as HTMLDivElement).textContent = p.text;
@@ -190,7 +174,6 @@ function paintUI() {
   });
   applyVisualSettings(state.settings);
   renderPromptsList();
-  renderControlBar();
   updatePlayPauseButton();
 }
 
@@ -209,10 +192,10 @@ function showStatus(msg: string) {
 
 // Visible version marker so users can verify which build they installed
 // (download caching of the old apk made it look like nothing changed).
-// APP_VERSION is hardcoded; BUILD_DATE is injected at build time via vite define
-// (see src/globals.d.ts) — the date reflects the actual packaged build, never
-// the user's runtime clock.
-const APP_VERSION = 'v1.6.0';
+// APP_VERSION and BUILD_DATE are both injected at build time via vite define
+// (see src/globals.d.ts). APP_VERSION comes from tauri.conf.json, so what the
+// UI shows is always the version actually stamped into the package.
+const APP_VERSION = `v${__APP_VERSION__}`;
 function renderVersion() {
   const el = document.getElementById('appVersion');
   if (el) el.textContent = `词悬浮 ${APP_VERSION} · 构建 ${__BUILD_DATE__}`;
@@ -277,12 +260,16 @@ function renamePrompt(idx: number) {
 }
 
 function prevPrompt() {
-  if (state.currentIndex > 0) switchPrompt(state.currentIndex - 1);
+  // 已在第一条时直接返回：switchPrompt 自己会 no-op，但 resetAndCountdown
+  // 仍会倒数 3 秒重播当前这条，看起来像卡住了。
+  if (state.currentIndex <= 0) return;
+  switchPrompt(state.currentIndex - 1);
   resetAndCountdown();
 }
 
 function nextPrompt() {
-  if (state.currentIndex < state.prompts.length - 1) switchPrompt(state.currentIndex + 1);
+  if (state.currentIndex >= state.prompts.length - 1) return;
+  switchPrompt(state.currentIndex + 1);
   resetAndCountdown();
 }
 
@@ -309,8 +296,8 @@ function collapseSettings(): void {
 // 悬浮按钮外观随 floating 变化（按钮自带 inline style，必须直接改 style 才盖得住）
 // 用「文字 + 配色」双重区分，避免只靠颜色分不清状态
 function updateFloatingButton(): void {
-  const btn = $('startFloatingBtn') as HTMLButtonElement | null;
-  if (!btn) return;
+  // $() 找不到元素会直接抛错、不会返回 null —— 原来的 null 判断是死代码
+  const btn = $('startFloatingBtn') as HTMLButtonElement;
   if (floating) {
     btn.textContent = '退出悬浮';
     // 半透明琥珀底：能透出背后内容，不糊住文字；字改用浅黄保证可读
@@ -439,8 +426,10 @@ function step(now: number) {
       scrollOffset = 0;
     } else {
       scrollOffset = Math.max(0, maxOffset);
-      scrolling = false;
-      updatePlayPauseButton();
+      // 滚到头且未开循环：必须回到编辑态。只置 scrolling=false 会停在
+      // 「既不在滚、也不能编辑」的状态，此时点屏幕会重新 startScroll 又立刻
+      // 撞到末尾停下，用户会以为卡死。
+      pauseScroll();
     }
   }
   const mirror = state.settings.mirrorMode ? ' scaleX(-1)' : '';
@@ -662,8 +651,11 @@ async function importFile(targetIdx: number) {
     if (!selected || typeof selected !== 'string') return;
     const MAX_BYTES = 1024 * 1024;
     const text = await readTextFile(selected);
-    if (text.length > MAX_BYTES) {
-      showStatus('文件过大，请使用 ≤1MB 的文件');
+    // 按 UTF-8 字节数算，不能用 text.length —— 那是字符数，中文一字占 3 字节，
+    // 会把 1MB 的上限悄悄放大到约 3MB。
+    const bytes = new TextEncoder().encode(text).length;
+    if (bytes > MAX_BYTES) {
+      showStatus(`文件过大（${(bytes / 1024 / 1024).toFixed(1)} MB），请使用 ≤1MB 的文件`);
       return;
     }
     const p = state.prompts[targetIdx];

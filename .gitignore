@@ -51,3 +51,6 @@ Thumbs.db
 
 # Throwaway release archives (local build outputs, never committed)
 release-archive/
+
+# 第三方工具目录（本地状态，不入库）
+.workbuddy/
