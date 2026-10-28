@@ -221,6 +221,9 @@ npx tauri android build --target aarch64 --apk
 
 # 2) 签名（本项目 gen/android 没有 keystore.properties，所以 CLI 只会产出 unsigned）
 & "D:\Android\Sdk\build-tools\35.0.0\apksigner.bat" sign `
+  # ⚠️ 这是 v1.5.1 当时的做法（debug 证书）。v1.6.0 起正式包必须用
+  #    %USERPROFILE%\.android	eleprompter-release.jks，否则已装 release 版的设备无法升级。
+  #    见 android-build-and-verify-guide.md §2.3
   --ks "$env:USERPROFILE\.android\debug.keystore" `
   --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey `
   --out release\teleprompter-arm64-v1.5.1.apk `
@@ -249,6 +252,9 @@ cd src-tauri\gen\android
 .\gradlew.bat assembleArm64Release -x rustBuildArm64Release -x rustBuildUniversalRelease --no-daemon
 
 # 4) 签名
+  # ⚠️ 下面这段是本篇复盘当时（v1.5.1）的做法，用的是 debug 证书。
+  #    v1.6.0 起正式包必须用 %USERPROFILE%\.android\teleprompter-release.jks，
+  #    否则已装 release 版的设备无法覆盖升级。现行做法见 android-build-and-verify-guide.md §2.3
 cd ..\..\..
 & "D:\Android\Sdk\build-tools\35.0.0\apksigner.bat" sign `
   --ks "$env:USERPROFILE\.android\debug.keystore" `

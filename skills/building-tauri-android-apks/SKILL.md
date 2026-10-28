@@ -43,10 +43,12 @@ npx tauri android build --target aarch64 --target x86_64 --apk
 $bt = "$env:ANDROID_SDK_ROOT\build-tools\35.0.0"
 $unsigned = "src-tauri\gen\android\app\build\outputs\apk\universal\release\app-universal-release-unsigned.apk"
 & "$bt\zipalign.exe" -f -p 4 $unsigned release\app-aligned.apk
+$ksPass = (Get-Content 'E:\OpenClaw\teleprompter-keystore.txt' -TotalCount 1).Trim()
 & "$bt\apksigner.bat" sign `
-  --ks "$env:USERPROFILE\.android\debug.keystore" --ks-pass pass:android `
-  --key-pass pass:android --ks-key-alias androiddebugkey `
+  --ks "$env:USERPROFILE\.android\teleprompter-release.jks" `
+  --ks-pass "pass:$ksPass" --key-pass "pass:$ksPass" --ks-key-alias teleprompter `
   --out release\app-arm64.apk release\app-aligned.apk
+#   ^ 正式包用 release 证书。debug 签名只用于本地调试；换签会让已装 release 版的设备无法覆盖升级。
 & "$bt\apksigner.bat" verify --print-certs release\app-arm64.apk   # v2 and v3 must be true
 
 # 3. verify the artifact itself

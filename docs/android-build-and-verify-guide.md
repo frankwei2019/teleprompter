@@ -12,6 +12,7 @@
 > - 模拟器：`D:\Android\Sdk\emulator\emulator.exe`；AVD **`tauri_test`**（x86_64 / Android 14 / google_apis / `hw.gpu.enabled=yes` / `hw.gpu.mode=host`）
 > - 系统镜像：`D:\Android\Sdk\system-images\android-34\google_apis\{arm64-v8a,x86_64}`
 > - Debug keystore：`C:\Users\28658\.android\debug.keystore`（已存在）
+> - **Release keystore（正式发版用这个）**：`C:\Users\28658\.android\teleprompter-release.jks`（口令见 `E:\OpenClaw\teleprompter-keystore.txt`，不入库）
 >
 > 配套文档：黑屏根因分析见 [`android-build-black-screen.md`](android-build-black-screen.md)。
 
@@ -84,22 +85,34 @@ src-tauri\gen\android\app\build\outputs\apk\universal\release\app-universal-rele
 ### 1.2 交付包命名与归档
 
 ```powershell
-$ver = '1.5.1'
+$ver = '1.6.0'
 $src = 'src-tauri\gen\android\app\build\outputs\apk\universal\release\app-universal-release-unsigned.apk'
 $out = "release\teleprompter-arm64-v$ver.apk"
 
-# 1) 签名（见 §2）
+# 1) 签名（见 §2）—— v1.6.0 起用专用 release 证书，不再是 debug 证书。
+#    口令从本机文件读，绝不写进仓库、也不要贴进对话。
+$ksPass = (Get-Content 'E:\OpenClaw\teleprompter-keystore.txt' -TotalCount 1).Trim()
+
+# 别名先用 keytool 确认一次（不同机器可能不一样）：
+#   & "$env:JAVA_HOME\bin\keytool.exe" -list `
+#       -keystore "$env:USERPROFILE\.android\teleprompter-release.jks" -storepass $ksPass
 & "D:\Android\Sdk\build-tools\35.0.0\apksigner.bat" sign `
-  --ks "$env:USERPROFILE\.android\debug.keystore" `
-  --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey `
+  --ks "$env:USERPROFILE\.android\teleprompter-release.jks" `
+  --ks-pass "pass:$ksPass" --key-pass "pass:$ksPass" --ks-key-alias teleprompter `
   --out $out $src
 
 # 2) 顺手清掉 v4 签名旁产物
 Remove-Item "$out.idsig" -ErrorAction SilentlyContinue
 ```
 
+> ⚠️ **别用 debug.keystore 签 v1.6.0 及以后的包。** v1.5.1 是 debug 证书
+> （`C=US, O=Android, CN=Android Debug`），v1.6.0 换成了专用 release 证书
+> （`CN=teleprompter, OU=Dev, O=teleprompter, L=Shenzhen, ST=Guangdong, C=CN`）。
+> Android 要求升级包与已装包同一签名：**装了 v1.6.0 的设备无法覆盖安装 debug 签名的包**，
+> 反过来同理。v1.6.0 之后的版本必须继续用 `teleprompter-release.jks`。
+
 最终交付路径：`D:\mySoftware\teleprompter\release\teleprompter-arm64-v<版本号>.apk`
-（现存：`release\teleprompter-arm64-v1.5.1.apk`，12,412,305 B，已用 debug 证书签名）
+（现存：`release\teleprompter-arm64-v1.6.0.apk`，12,420,497 B，**release 证书签名**；v1.5.1 是 debug 证书）
 
 ### 1.3 如果还想在模拟器上测 x86_64 原生 ABI（性能更好）
 
@@ -135,31 +148,42 @@ npx tauri android build --target x86_64 --apk
 | 生成 keystore | `keytool`（JDK 自带） | `$env:JAVA_HOME\bin\keytool.exe` |
 | 查看 APK 信息 | `aapt2.exe` / `apkanalyzer.bat` | 同上 build-tools / cmdline-tools |
 
-### 2.3 Debug keystore 在哪、怎么签
-
-位置：`C:\Users\28658\.android\debug.keystore`（**已存在**，2618 B）
-参数（Android 官方默认值）：
+### 2.3 Release keystore 在哪、怎么签（v1.6.0 起）
 
 | 项 | 值 |
 |---|---|
-| store 文件 | `%USERPROFILE%\.android\debug.keystore` |
-| store 密码 | `android` |
-| key 别名 | `androiddebugkey` |
-| key 密码 | `android` |
+| store 文件 | `C:\Users\28658\.android\teleprompter-release.jks` |
+| store 密码 | **不在仓库里** —— 见本机 `E:\OpenClaw\teleprompter-keystore.txt` |
+| key 别名 | `teleprompter`（第一次用前先 `keytool -list` 确认） |
+| key 密码 | 同 store 密码 |
+| 证书 DN | `CN=teleprompter, OU=Dev, O=teleprompter, L=Shenzhen, ST=Guangdong, C=CN` |
+| 证书 SHA-256 | `5dccdb805686d86f4bb3f740ef63361e2236b0f6687bc8914f078271a96e91af` |
 
-签名命令：
+签名命令（口令从本机文件读，绝不写进仓库或对话）：
 
 ```powershell
+$ksPass = (Get-Content 'E:\OpenClaw\teleprompter-keystore.txt' -TotalCount 1).Trim()
 & "D:\Android\Sdk\build-tools\35.0.0\apksigner.bat" sign `
-  --ks "$env:USERPROFILE\.android\debug.keystore" `
-  --ks-pass pass:android `
-  --key-pass pass:android `
-  --ks-key-alias androiddebugkey `
-  --out "release\teleprompter-arm64-v1.5.1.apk" `
+  --ks "$env:USERPROFILE\.android\teleprompter-release.jks" `
+  --ks-pass "pass:$ksPass" --key-pass "pass:$ksPass" --ks-key-alias teleprompter `
+  --out "release\teleprompter-arm64-v1.6.0.apk" `
   "src-tauri\gen\android\app\build\outputs\apk\universal\release\app-universal-release-unsigned.apk"
 ```
 
 预期输出：**无输出、退出码 0**（成功时 apksigner 很安静）。同时会在输出目录生成 `<name>.apk.idsig`（v4 签名旁文件，可删）。
+
+**签完必须确认签的是哪把钥匙**（签错钥匙的包用户装不上，且很难事后发现）：
+
+```powershell
+& "D:\Android\Sdk\build-tools\35.0.0\apksigner.bat" verify --print-certs "release\teleprompter-arm64-v1.6.0.apk"
+# 期望：Signer #1 certificate DN: CN=teleprompter, OU=Dev, ...
+# 若看到 CN=Android Debug  -> 签错钥匙了，重签
+```
+
+> **历史（仅供理解旧包）**：v1.5.1 及更早用的是 debug keystore
+> （`%USERPROFILE%\.android\debug.keystore`，密码 `android`，别名 `androiddebugkey`
+> —— 都是 Android 官方默认值，不是机密）。那条路现在**只用于本地临时调试包**，
+> 不要用于正式发布：装过 v1.6.0 的设备无法覆盖安装 debug 签名的包。
 
 > 签名必须在 `zipalign` **之后**；AGP 产出的 unsigned APK 已经对齐，直接签即可。
 > 如果你用 `zipalign` 手工重排过，顺序是：zipalign → apksigner。
@@ -672,8 +696,9 @@ if ($LASTEXITCODE -ne 0) { throw "tauri android build failed ($LASTEXITCODE)" }
 $src='src-tauri\gen\android\app\build\outputs\apk\universal\release\app-universal-release-unsigned.apk'
 $out='release\teleprompter-arm64-v1.5.1.apk'
 & "D:\Android\Sdk\build-tools\35.0.0\apksigner.bat" sign `
-  --ks "$env:USERPROFILE\.android\debug.keystore" --ks-pass pass:android `
-  --key-pass pass:android --ks-key-alias androiddebugkey --out $out $src
+  --ks "$env:USERPROFILE\.android\teleprompter-release.jks" `
+  --ks-pass "pass:$ksPass" --key-pass "pass:$ksPass" --ks-key-alias teleprompter --out $out $src
+#   ^ v1.6.0 起用 release 证书；口令见 E:\OpenClaw\teleprompter-keystore.txt（§2.3）
 if ($LASTEXITCODE -ne 0) { throw "apksigner failed" }
 
 # ===== 静态自检 =====
@@ -707,6 +732,7 @@ Get-Content "$env:TEMP\emu.log" -ErrorAction SilentlyContinue | Select-String 'e
 | adb / emulator | `D:\Android\Sdk\platform-tools\`、`D:\Android\Sdk\emulator\` |
 | AVD | `D:\Android\Avd\tauri_test.avd\config.ini`（`hw.gpu.mode=host`） |
 | Debug keystore | `C:\Users\28658\.android\debug.keystore`（alias `androiddebugkey` / pass `android`） |
+| **Release keystore** | `C:\Users\28658\.android\teleprompter-release.jks`（alias `teleprompter`，口令见本机文件）—— 正式发版用它 |
 | Rust linker 配置 | `D:\mySoftware\teleprompter\src-tauri\.cargo\config.toml` |
 | Gradle 工程 | `D:\mySoftware\teleprompter\src-tauri\gen\android\` |
 | 未签名 APK | `src-tauri\gen\android\app\build\outputs\apk\universal\release\app-universal-release-unsigned.apk` |

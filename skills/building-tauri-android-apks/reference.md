@@ -83,9 +83,12 @@ $bt = "$env:ANDROID_SDK_ROOT\build-tools\35.0.0"
 $unsigned = "src-tauri\gen\android\app\build\outputs\apk\universal\release\app-universal-release-unsigned.apk"
 & "$bt\zipalign.exe" -f -p 4 $unsigned release\app-aligned.apk
 & "$bt\apksigner.bat" sign `
-  --ks "$env:USERPROFILE\.android\debug.keystore" `
-  --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey `
+  --ks "$env:USERPROFILE\.android\teleprompter-release.jks" `
+  --ks-pass "pass:$ksPass" --key-pass "pass:$ksPass" --ks-key-alias teleprompter `
   --out release\app-arm64.apk release\app-aligned.apk
+#   ^ 本项目的正式包用专用 release 证书，不是 debug keystore。
+#     debug 签名只用于本地临时调试；换成 debug 签会让已装 release 版的设备无法覆盖升级。
+#     口令从本机文件读（见 docs/android-build-and-verify-guide.md §2.3），不要硬编码。
 & "$bt\apksigner.bat" verify --verbose --print-certs release\app-arm64.apk
 #   -> "Verified using v2 scheme: true" and "v3 scheme: true"
 
